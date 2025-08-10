@@ -1,0 +1,4 @@
+# Production dependencies for Sierra Leone Council Dashboard
+gunicorn==21.2.0
+flask==3.0.0
+waitress==3.0.0

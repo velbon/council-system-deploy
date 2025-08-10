@@ -1,0 +1,37 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  deploy-heroku:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Heroku
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{secrets.HEROKU_API_KEY}}
+        heroku_app_name: "council-system-sl"
+        heroku_email: "velbon@example.com"
+        
+  build-docker:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: |
+        docker build -t council-dashboard:${{ github.sha }} .
+        
+    - name: Test application
+      run: |
+        docker run --rm -d --name test-app -p 8000:8000 council-dashboard:${{ github.sha }}
+        sleep 30
+        curl -f http://localhost:8000/health
+        docker stop test-app
