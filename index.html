@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Council Project Management System</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <style>
+        /* Main App Styles */
+        .app {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .app-content {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        /* Councils Grid */
+        .councils-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .council-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .council-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+        }
+
+        .council-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: #2c3e50;
+            font-size: 1.3em;
+        }
+
+        .council-card p {
+            color: #7f8c8d;
+            margin: 0 0 1.5rem 0;
+        }
+
+        .projects-list h4 {
+            margin: 0 0 1rem 0;
+            color: #34495e;
+            font-size: 1.1em;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 0.5rem;
+        }
+
+        .project-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .project-item:hover {
+            background: #e3f2fd;
+            transform: translateX(4px);
+        }
+
+        .project-title {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .project-status {
+            background: #3498db;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        /* Project Details */
+        .project-details {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .back-button {
+            margin-bottom: 2rem;
+        }
+
+        .back-button button {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+
+        .back-button button:hover {
+            background: #5a6268;
+        }
+
+        .project-info {
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid #ecf0f1;
+        }
+
+        .project-info h2 {
+            margin: 0 0 1rem 0;
+            color: #2c3e50;
+            font-size: 2em;
+        }
+
+        .project-info p {
+            margin: 0.5rem 0;
+            color: #34495e;
+            font-size: 1.1em;
+        }
+
+        .project-info strong {
+            color: #2c3e50;
+        }
+
+        /* File Management Styles */
+        .project-files {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .project-files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e1e5e9;
+            padding-bottom: 15px;
+        }
+
+        .project-files-header h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+
+        .file-count {
+            background: #3498db;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .upload-area {
+            border: 3px dashed #bdc3c7;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #3498db;
+            background: #e3f2fd;
+        }
+
+        .upload-area.drag-over {
+            border-color: #2ecc71;
+            background: #e8f5e8;
+            transform: scale(1.02);
+        }
+
+        .upload-label {
+            display: block;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .upload-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .upload-content span {
+            color: #2c3e50;
+            font-weight: 500;
+            font-size: 1.1em;
+        }
+
+        .upload-content small {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .uploading {
+            color: #f39c12;
+            font-weight: 500;
+            font-size: 1.1em;
+        }
+
+        .files-list {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .no-files {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ecf0f1;
+            transition: background-color 0.2s ease;
+        }
+
+        .file-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-icon {
+            font-size: 1.8em;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .file-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #2c3e50;
+            font-size: 1em;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+
+        .file-meta {
+            color: #7f8c8d;
+            font-size: 0.85em;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .file-actions button {
+            background: none;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.2s ease;
+        }
+
+        .btn-download:hover {
+            background-color: #e3f2fd;
+            transform: scale(1.1);
+        }
+
+        .btn-delete:hover {
+            background-color: #ffebee;
+            transform: scale(1.1);
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #c62828;
+        }
+
+        .success-message {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { createClient } = supabase;
+
+        // Initialize Supabase client
+        const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+        // File management functions
+        const uploadFile = async (projectId, file) => {
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from('documents')
+                    .upload(`project_${projectId}/${file.name}`, file);
+
+                if (error) {
+                    console.error('Upload failed:', error);
+                    return { success: false, error };
+                }
+
+                const { data: fileRecord, error: dbError } = await supabaseClient
+                    .from('documents')
+                    .insert({
+                        project_id: projectId,
+                        file_url: data.path
+                    })
+                    .select()
+                    .single();
+
+                if (dbError) {
+                    console.error('Database save failed:', dbError);
+                    return { success: false, error: dbError };
+                }
+
+                return { success: true, data: fileRecord };
+            } catch (err) {
+                console.error('Upload error:', err);
+                return { success: false, error: err };
+            }
+        };
+
+        const getProjectFiles = async (projectId) => {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('documents')
+                    .select('*')
+                    .eq('project_id', projectId)
+                    .order('uploaded_at', { ascending: false });
+
+                if (error) {
+                    console.error('Failed to fetch files:', error);
+                    return { success: false, error };
+                }
+
+                return { success: true, data };
+            } catch (err) {
+                console.error('Fetch files error:', err);
+                return { success: false, error: err };
+            }
+        };
+
+        const downloadFile = async (filePath, fileName) => {
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from('documents')
+                    .download(filePath);
+                
+                if (error) {
+                    console.error('Download failed:', error);
+                    return { success: false, error };
+                }
+
+                const url = URL.createObjectURL(data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName || filePath.split('/').pop();
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                return { success: true };
+            } catch (err) {
+                console.error('Download error:', err);
+                return { success: false, error: err };
+            }
+        };
+
+        const deleteFile = async (filePath, fileId) => {
+            try {
+                const { error: storageError } = await supabaseClient.storage
+                    .from('documents')
+                    .remove([filePath]);
+                
+                if (storageError) {
+                    console.error('Storage deletion failed:', storageError);
+                    return { success: false, error: storageError };
+                }
+
+                const { error: dbError } = await supabaseClient
+                    .from('documents')
+                    .delete()
+                    .eq('id', fileId);
+
+                if (dbError) {
+                    console.error('Database deletion failed:', dbError);
+                    return { success: false, error: dbError };
+                }
+
+                return { success: true };
+            } catch (err) {
+                console.error('Delete error:', err);
+                return { success: false, error: err };
+            }
+        };
+
+        // File icon helper
+        const getFileIcon = (extension) => {
+            const iconMap = {
+                pdf: '📄',
+                doc: '📝', docx: '📝',
+                xls: '📊', xlsx: '📊',
+                ppt: '📽️', pptx: '📽️',
+                jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+                mp4: '🎥', mov: '🎥', avi: '🎥',
+                mp3: '🎵', wav: '🎵',
+                zip: '📦', rar: '📦',
+                txt: '📄',
+                csv: '📊'
+            };
+            return iconMap[extension] || '📄';
+        };
+
+        // ProjectFiles Component
+        const ProjectFiles = ({ projectId, projectTitle }) => {
+            const [files, setFiles] = useState([]);
+            const [uploading, setUploading] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [dragOver, setDragOver] = useState(false);
+            const [message, setMessage] = useState('');
+
+            useEffect(() => {
+                if (projectId) {
+                    loadFiles();
+                }
+            }, [projectId]);
+
+            const loadFiles = async () => {
+                setLoading(true);
+                const result = await getProjectFiles(projectId);
+                if (result.success) {
+                    setFiles(result.data);
+                }
+                setLoading(false);
+            };
+
+            const handleFileUpload = async (selectedFiles) => {
+                if (!selectedFiles || selectedFiles.length === 0) return;
+
+                setUploading(true);
+                
+                for (const file of selectedFiles) {
+                    const result = await uploadFile(projectId, file);
+                    if (result.success) {
+                        setFiles(prev => [result.data, ...prev]);
+                        setMessage(`✅ Uploaded: ${file.name}`);
+                        setTimeout(() => setMessage(''), 3000);
+                    } else {
+                        setMessage(`❌ Failed to upload ${file.name}`);
+                        setTimeout(() => setMessage(''), 3000);
+                    }
+                }
+                
+                setUploading(false);
+            };
+
+            const handleFileSelect = (event) => {
+                const selectedFiles = Array.from(event.target.files);
+                handleFileUpload(selectedFiles);
+                event.target.value = '';
+            };
+
+            const handleDownload = async (file) => {
+                const fileName = file.file_url.split('/').pop();
+                await downloadFile(file.file_url, fileName);
+            };
+
+            const handleDelete = async (file) => {
+                if (window.confirm(`Are you sure you want to delete ${file.file_url.split('/').pop()}?`)) {
+                    const result = await deleteFile(file.file_url, file.id);
+                    if (result.success) {
+                        setFiles(prev => prev.filter(f => f.id !== file.id));
+                        setMessage('✅ File deleted');
+                        setTimeout(() => setMessage(''), 3000);
+                    } else {
+                        setMessage('❌ Delete failed');
+                        setTimeout(() => setMessage(''), 3000);
+                    }
+                }
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                setDragOver(true);
+            };
+
+            const handleDragLeave = (e) => {
+                e.preventDefault();
+                setDragOver(false);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const droppedFiles = Array.from(e.dataTransfer.files);
+                handleFileUpload(droppedFiles);
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+
+            if (loading) {
+                return <div className="loading">Loading files...</div>;
+            }
+
+            return (
+                <div className="project-files">
+                    <div className="project-files-header">
+                        <h3>Project Files - {projectTitle}</h3>
+                        <span className="file-count">{files.length} files</span>
+                    </div>
+
+                    {message && (
+                        <div className={message.includes('✅') ? 'success-message' : 'error-message'}>
+                            {message}
+                        </div>
+                    )}
+
+                    <div 
+                        className={`upload-area ${dragOver ? 'drag-over' : ''}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
+                        <input
+                            type="file"
+                            id="file-input"
+                            multiple
+                            onChange={handleFileSelect}
+                            style={{ display: 'none' }}
+                        />
+                        <label htmlFor="file-input" className="upload-label">
+                            {uploading ? (
+                                <div className="uploading">
+                                    <span>⏳ Uploading...</span>
+                                </div>
+                            ) : (
+                                <div className="upload-content">
+                                    <span className="upload-icon">📁</span>
+                                    <span>Click to upload files or drag and drop</span>
+                                    <small>Support for all file types</small>
+                                </div>
+                            )}
+                        </label>
+                    </div>
+
+                    <div className="files-list">
+                        {files.length === 0 ? (
+                            <div className="no-files">
+                                <p>No files uploaded yet</p>
+                                <small>Upload your first document using the area above</small>
+                            </div>
+                        ) : (
+                            files.map((file) => {
+                                const fileName = file.file_url.split('/').pop();
+                                const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+                                
+                                return (
+                                    <div key={file.id} className="file-item">
+                                        <div className="file-info">
+                                            <div className="file-icon">
+                                                {getFileIcon(fileExtension)}
+                                            </div>
+                                            <div className="file-details">
+                                                <div className="file-name">{fileName}</div>
+                                                <div className="file-meta">
+                                                    <span>Uploaded {formatDate(file.uploaded_at)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="file-actions">
+                                            <button 
+                                                onClick={() => handleDownload(file)}
+                                                className="btn-download"
+                                                title="Download file"
+                                            >
+                                                ⬇️
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(file)}
+                                                className="btn-delete"
+                                                title="Delete file"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [councils, setCouncils] = useState([]);
+            const [selectedProject, setSelectedProject] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                async function fetchData() {
+                    const { data, error } = await supabaseClient
+                        .from('councils')
+                        .select(`
+                            id, name, location,
+                            projects (
+                                id, title, phase, status, budget, spent,
+                                updates (*)
+                            )
+                        `);
+                    if (error) console.error(error);
+                    else setCouncils(data || []);
+                    setLoading(false);
+                }
+                fetchData();
+            }, []);
+
+            const handleProjectClick = (project, councilName) => {
+                setSelectedProject({
+                    ...project,
+                    councilName: councilName
+                });
+            };
+
+            if (loading) {
+                return <div className="loading">Loading councils and projects...</div>;
+            }
+
+            return (
+                <div className="app">
+                    <div className="app-header">
+                        <h1>Council Project Management System</h1>
+                    </div>
+
+                    <div className="app-content">
+                        {selectedProject ? (
+                            <div className="project-details">
+                                <div className="back-button">
+                                    <button onClick={() => setSelectedProject(null)}>
+                                        ← Back to Projects
+                                    </button>
+                                </div>
+                                
+                                <div className="project-info">
+                                    <h2>{selectedProject.title}</h2>
+                                    <p><strong>Council:</strong> {selectedProject.councilName}</p>
+                                    <p><strong>Phase:</strong> {selectedProject.phase}</p>
+                                    <p><strong>Status:</strong> {selectedProject.status}</p>
+                                    <p><strong>Budget:</strong> ${selectedProject.budget?.toLocaleString()}</p>
+                                </div>
+
+                                <ProjectFiles 
+                                    projectId={selectedProject.id}
+                                    projectTitle={selectedProject.title}
+                                />
+                            </div>
+                        ) : (
+                            <div className="councils-grid">
+                                {councils.map(council => (
+                                    <div key={council.id} className="council-card">
+                                        <h3>{council.name}</h3>
+                                        <p>{council.location}</p>
+                                        
+                                        <div className="projects-list">
+                                            <h4>Projects ({council.projects?.length || 0})</h4>
+                                            {council.projects?.map(project => (
+                                                <div 
+                                                    key={project.id} 
+                                                    className="project-item"
+                                                    onClick={() => handleProjectClick(project, council.name)}
+                                                >
+                                                    <div className="project-title">{project.title}</div>
+                                                    <div className="project-status">{project.status}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
