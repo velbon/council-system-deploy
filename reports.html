@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Advanced Reporting</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- Excel Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .reports-header { background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%); }
+        .report-card { transition: all 0.3s; cursor: pointer; border: 2px solid transparent; }
+        .report-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -3px rgba(0,0,0,0.1); border-color: #1e40af; }
+        .report-card.selected { border-color: #1e40af; background: #eff6ff; }
+        .chart-container { position: relative; height: 300px; }
+        .export-progress { transition: width 0.3s ease; }
+        .filter-group { background: #f8fafc; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; }
+        .metric-card { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .metric-number { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .metric-change { font-size: 0.875rem; }
+        .metric-change.positive { color: #059669; }
+        .metric-change.negative { color: #dc2626; }
+        .report-preview { background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; max-height: 400px; overflow-y: auto; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .loading-content { background: white; padding: 2rem; border-radius: 0.5rem; text-align: center; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .data-table th { background: #f9fafb; padding: 0.5rem; text-align: left; font-weight: 600; border: 1px solid #e5e7eb; }
+        .data-table td { padding: 0.5rem; border: 1px solid #e5e7eb; }
+        .trend-indicator { display: inline-flex; align-items: center; gap: 0.25rem; }
+        .trend-up { color: #059669; }
+        .trend-down { color: #dc2626; }
+        .trend-stable { color: #6b7280; }
+        .schedule-item { display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            📊 Loading Advanced Reporting System...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Current user state
+        const [currentUser, setCurrentUser] = useState(null);
+
+        // Check authentication
+        useEffect(() => {
+            try {
+                const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                console.log('User from localStorage:', user);
+                if (!user.id) {
+                    console.log('No user found, redirecting to login');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                console.log('User authenticated:', user);
+                setCurrentUser(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                window.location.href = 'login.html';
+            }
+        }, []);
+
+        const AdvancedReporting = () => {
+            const [selectedReportType, setSelectedReportType] = useState('national');
+            const [reportData, setReportData] = useState({});
+            const [filters, setFilters] = useState({
+                dateRange: 'last_30_days',
+                councils: [],
+                projects: [],
+                status: 'all',
+                budget_range: 'all'
+            });
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [progress, setProgress] = useState(0);
+            const [reportPreview, setReportPreview] = useState(null);
+            const [scheduledReports, setScheduledReports] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            const chartRefs = useRef({});
+
+            const reportTypes = [
+                {
+                    id: 'national',
+                    title: 'National Overview Report',
+                    description: 'Comprehensive overview of all projects across Sierra Leone',
+                    icon: '🇸🇱',
+                    metrics: ['Total Budget', 'Projects Count', 'Completion Rate', 'Council Performance'],
+                    features: ['Executive Summary', 'Budget Analysis', 'Performance Metrics', 'Trend Analysis']
+                },
+                {
+                    id: 'council',
+                    title: 'Council Performance Report',
+                    description: 'Detailed analysis of individual council performance',
+                    icon: '🏛️',
+                    metrics: ['Local Budget', 'Project Status', 'Milestone Progress', 'Resource Utilization'],
+                    features: ['Council Summary', 'Project Breakdown', 'Timeline Analysis', 'Recommendations']
+                },
+                {
+                    id: 'project',
+                    title: 'Project Detail Report',
+                    description: 'In-depth analysis of specific projects',
+                    icon: '📊',
+                    metrics: ['Budget vs Spent', 'Timeline Adherence', 'Milestone Completion', 'Risk Assessment'],
+                    features: ['Project Overview', 'Financial Analysis', 'Progress Tracking', 'Issue Log']
+                },
+                {
+                    id: 'financial',
+                    title: 'Financial Analysis Report',
+                    description: 'Comprehensive financial reporting and analysis',
+                    icon: '💰',
+                    metrics: ['Budget Allocation', 'Expenditure Tracking', 'Cost Variance', 'ROI Analysis'],
+                    features: ['Budget Overview', 'Expense Breakdown', 'Variance Analysis', 'Forecasting']
+                },
+                {
+                    id: 'compliance',
+                    title: 'Compliance & Audit Report',
+                    description: 'Compliance status and audit trail analysis',
+                    icon: '🔍',
+                    metrics: ['Validation Rate', 'Compliance Score', 'Audit Findings', 'Risk Level'],
+                    features: ['Compliance Status', 'Audit Trail', 'Risk Assessment', 'Recommendations']
+                },
+                {
+                    id: 'performance',
+                    title: 'Performance Analytics Report',
+                    description: 'KPI tracking and performance measurement',
+                    icon: '📈',
+                    metrics: ['KPI Achievement', 'Performance Trends', 'Benchmark Comparison', 'Efficiency Metrics'],
+                    features: ['KPI Dashboard', 'Trend Analysis', 'Benchmarking', 'Performance Insights']
+                }
+            ];
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    }
+                    
+                    loadMockData();
+                } catch (error) {
+                    console.warn('Supabase initialization failed, using mock data');
+                    loadMockData();
+                }
+            }, []);
+
+            const loadMockData = async () => {
+                setLoading(true);
+                
+                // Mock report data
+                const mockData = {
+                    national: {
+                        summary: {
+                            total_projects: 245,
+                            total_budget: 125000000000, // 125B SLL
+                            total_spent: 87500000000,   // 87.5B SLL
+                            completion_rate: 67.8,
+                            active_councils: 16,
+                            overdue_projects: 12
+                        },
+                        budget_by_council: [
+                            { name: 'Freetown', budget: 35000000000, spent: 28000000000, completion: 80 },
+                            { name: 'Bo', budget: 18000000000, spent: 12600000000, completion: 70 },
+                            { name: 'Kenema', budget: 15000000000, spent: 10500000000, completion: 70 },
+                            { name: 'Makeni', budget: 12000000000, spent: 9000000000, completion: 75 },
+                            { name: 'Koidu', budget: 8000000000, spent: 5600000000, completion: 70 }
+                        ],
+                        performance_trends: [
+                            { month: 'Jan', completion: 45, budget_util: 42 },
+                            { month: 'Feb', completion: 52, budget_util: 48 },
+                            { month: 'Mar', completion: 58, budget_util: 55 },
+                            { month: 'Apr', completion: 63, budget_util: 61 },
+                            { month: 'May', completion: 67.8, budget_util: 70 }
+                        ]
+                    },
+                    council: {
+                        summary: {
+                            council_name: 'Freetown City Council',
+                            total_projects: 45,
+                            total_budget: 35000000000,
+                            total_spent: 28000000000,
+                            completion_rate: 80,
+                            milestones_achieved: 156,
+                            overdue_items: 3
+                        },
+                        project_breakdown: [
+                            { name: 'Road Infrastructure', budget: 15000000000, spent: 12000000000, status: 'Active', completion: 80 },
+                            { name: 'Waste Management', budget: 8000000000, spent: 6400000000, status: 'Active', completion: 80 },
+                            { name: 'Water Supply', budget: 7000000000, spent: 5600000000, status: 'Active', completion: 80 },
+                            { name: 'Health Centers', budget: 5000000000, spent: 4000000000, status: 'Active', completion: 80 }
+                        ]
+                    }
+                };
+
+                setReportData(mockData);
+                
+                // Mock scheduled reports
+                setScheduledReports([
+                    {
+                        id: 1,
+                        name: 'Weekly National Report',
+                        type: 'national',
+                        schedule: 'weekly',
+                        next_run: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+                        recipients: ['coordinator@ppms.sl', 'minister@gov.sl'],
+                        format: 'PDF'
+                    },
+                    {
+                        id: 2,
+                        name: 'Monthly Council Performance',
+                        type: 'council',
+                        schedule: 'monthly',
+                        next_run: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+                        recipients: ['councils@ppms.sl'],
+                        format: 'Excel'
+                    }
+                ]);
+                
+                setLoading(false);
+            };
+
+            const generateReport = async (format) => {
+                setIsGenerating(true);
+                setProgress(0);
+
+                try {
+                    // Simulate report generation progress
+                    for (let i = 0; i <= 100; i += 10) {
+                        setProgress(i);
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+
+                    const reportType = reportTypes.find(rt => rt.id === selectedReportType);
+                    const data = reportData[selectedReportType];
+
+                    if (format === 'pdf') {
+                        await generatePDFReport(reportType, data);
+                    } else if (format === 'excel') {
+                        await generateExcelReport(reportType, data);
+                    }
+
+                } catch (error) {
+                    console.error('Error generating report:', error);
+                    alert('Error generating report. Please try again.');
+                } finally {
+                    setIsGenerating(false);
+                    setProgress(0);
+                }
+            };
+
+            const generatePDFReport = async (reportType, data) => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Header
+                doc.setFontSize(20);
+                doc.text('PPMS - Public Project Management System', 20, 20);
+                doc.setFontSize(16);
+                doc.text(reportType.title, 20, 35);
+                doc.setFontSize(12);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 45);
+                doc.text(`Report Period: ${getDateRangeText()}`, 20, 55);
+
+                let yPos = 70;
+
+                if (selectedReportType === 'national' && data.summary) {
+                    // National Summary
+                    doc.setFontSize(14);
+                    doc.text('Executive Summary', 20, yPos);
+                    yPos += 15;
+
+                    const summaryData = [
+                        ['Metric', 'Value'],
+                        ['Total Projects', data.summary.total_projects.toString()],
+                        ['Total Budget', formatSLL(data.summary.total_budget)],
+                        ['Total Spent', formatSLL(data.summary.total_spent)],
+                        ['Completion Rate', data.summary.completion_rate + '%'],
+                        ['Active Councils', data.summary.active_councils.toString()],
+                        ['Overdue Projects', data.summary.overdue_projects.toString()]
+                    ];
+
+                    doc.autoTable({
+                        head: [summaryData[0]],
+                        body: summaryData.slice(1),
+                        startY: yPos,
+                        theme: 'striped',
+                        headStyles: { fillColor: [30, 64, 175] }
+                    });
+
+                    yPos = doc.lastAutoTable.finalY + 20;
+
+                    // Budget by Council
+                    if (data.budget_by_council) {
+                        doc.setFontSize(14);
+                        doc.text('Budget Allocation by Council', 20, yPos);
+                        yPos += 15;
+
+                        const councilData = [
+                            ['Council', 'Budget (SLL)', 'Spent (SLL)', 'Completion %']
+                        ];
+
+                        data.budget_by_council.forEach(council => {
+                            councilData.push([
+                                council.name,
+                                formatSLL(council.budget),
+                                formatSLL(council.spent),
+                                council.completion + '%'
+                            ]);
+                        });
+
+                        doc.autoTable({
+                            head: [councilData[0]],
+                            body: councilData.slice(1),
+                            startY: yPos,
+                            theme: 'striped',
+                            headStyles: { fillColor: [30, 64, 175] }
+                        });
+                    }
+                }
+
+                // Save the PDF
+                doc.save(`${reportType.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+            };
+
+            const generateExcelReport = async (reportType, data) => {
+                const workbook = XLSX.utils.book_new();
+                
+                if (selectedReportType === 'national' && data.summary) {
+                    // Summary Sheet
+                    const summaryData = [
+                        ['PPMS - Public Project Management System'],
+                        [reportType.title],
+                        [`Generated: ${new Date().toLocaleString()}`],
+                        [`Report Period: ${getDateRangeText()}`],
+                        [],
+                        ['Executive Summary'],
+                        ['Metric', 'Value'],
+                        ['Total Projects', data.summary.total_projects],
+                        ['Total Budget (SLL)', data.summary.total_budget],
+                        ['Total Spent (SLL)', data.summary.total_spent],
+                        ['Completion Rate (%)', data.summary.completion_rate],
+                        ['Active Councils', data.summary.active_councils],
+                        ['Overdue Projects', data.summary.overdue_projects]
+                    ];
+
+                    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+                    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+                    // Budget by Council Sheet
+                    if (data.budget_by_council) {
+                        const councilData = [
+                            ['Budget Allocation by Council'],
+                            [],
+                            ['Council', 'Budget (SLL)', 'Spent (SLL)', 'Completion (%)']
+                        ];
+
+                        data.budget_by_council.forEach(council => {
+                            councilData.push([
+                                council.name,
+                                council.budget,
+                                council.spent,
+                                council.completion
+                            ]);
+                        });
+
+                        const councilSheet = XLSX.utils.aoa_to_sheet(councilData);
+                        XLSX.utils.book_append_sheet(workbook, councilSheet, 'Council Budget');
+                    }
+
+                    // Performance Trends Sheet
+                    if (data.performance_trends) {
+                        const trendsData = [
+                            ['Performance Trends'],
+                            [],
+                            ['Month', 'Completion (%)', 'Budget Utilization (%)']
+                        ];
+
+                        data.performance_trends.forEach(trend => {
+                            trendsData.push([
+                                trend.month,
+                                trend.completion,
+                                trend.budget_util
+                            ]);
+                        });
+
+                        const trendsSheet = XLSX.utils.aoa_to_sheet(trendsData);
+                        XLSX.utils.book_append_sheet(workbook, trendsSheet, 'Performance Trends');
+                    }
+                }
+
+                // Save the Excel file
+                XLSX.writeFile(workbook, `${reportType.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            };
+
+            const generateReportPreview = () => {
+                const reportType = reportTypes.find(rt => rt.id === selectedReportType);
+                const data = reportData[selectedReportType];
+
+                if (!data) {
+                    setReportPreview(<div className="text-center text-gray-500 py-8">No data available for preview</div>);
+                    return;
+                }
+
+                setReportPreview(
+                    <div>
+                        <h3 className="text-lg font-semibold mb-4">{reportType.title} - Preview</h3>
+                        <div className="space-y-4">
+                            {selectedReportType === 'national' && data.summary && (
+                                <>
+                                    <div>
+                                        <h4 className="font-medium mb-2">Executive Summary</h4>
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div>Total Projects: <strong>{data.summary.total_projects}</strong></div>
+                                            <div>Total Budget: <strong>{formatSLL(data.summary.total_budget)}</strong></div>
+                                            <div>Total Spent: <strong>{formatSLL(data.summary.total_spent)}</strong></div>
+                                            <div>Completion Rate: <strong>{data.summary.completion_rate}%</strong></div>
+                                            <div>Active Councils: <strong>{data.summary.active_councils}</strong></div>
+                                            <div>Overdue Projects: <strong>{data.summary.overdue_projects}</strong></div>
+                                        </div>
+                                    </div>
+
+                                    {data.budget_by_council && (
+                                        <div>
+                                            <h4 className="font-medium mb-2">Top 5 Councils by Budget</h4>
+                                            <table className="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Council</th>
+                                                        <th>Budget</th>
+                                                        <th>Spent</th>
+                                                        <th>Completion</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.budget_by_council.map((council, index) => (
+                                                        <tr key={index}>
+                                                            <td>{council.name}</td>
+                                                            <td>{formatSLL(council.budget)}</td>
+                                                            <td>{formatSLL(council.spent)}</td>
+                                                            <td>{council.completion}%</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {selectedReportType === 'council' && data.summary && (
+                                <>
+                                    <div>
+                                        <h4 className="font-medium mb-2">Council Overview - {data.summary.council_name}</h4>
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div>Total Projects: <strong>{data.summary.total_projects}</strong></div>
+                                            <div>Total Budget: <strong>{formatSLL(data.summary.total_budget)}</strong></div>
+                                            <div>Total Spent: <strong>{formatSLL(data.summary.total_spent)}</strong></div>
+                                            <div>Completion Rate: <strong>{data.summary.completion_rate}%</strong></div>
+                                            <div>Milestones Achieved: <strong>{data.summary.milestones_achieved}</strong></div>
+                                            <div>Overdue Items: <strong>{data.summary.overdue_items}</strong></div>
+                                        </div>
+                                    </div>
+
+                                    {data.project_breakdown && (
+                                        <div>
+                                            <h4 className="font-medium mb-2">Project Breakdown</h4>
+                                            <table className="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Project</th>
+                                                        <th>Budget</th>
+                                                        <th>Spent</th>
+                                                        <th>Status</th>
+                                                        <th>Completion</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.project_breakdown.map((project, index) => (
+                                                        <tr key={index}>
+                                                            <td>{project.name}</td>
+                                                            <td>{formatSLL(project.budget)}</td>
+                                                            <td>{formatSLL(project.spent)}</td>
+                                                            <td>
+                                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                                    project.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                                }`}>
+                                                                    {project.status}
+                                                                </span>
+                                                            </td>
+                                                            <td>{project.completion}%</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const scheduleReport = () => {
+                const newReport = {
+                    id: Date.now(),
+                    name: `Scheduled ${reportTypes.find(rt => rt.id === selectedReportType)?.title}`,
+                    type: selectedReportType,
+                    schedule: 'weekly',
+                    next_run: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    recipients: ['user@example.com'],
+                    format: 'PDF'
+                };
+
+                setScheduledReports(prev => [...prev, newReport]);
+                alert('Report scheduled successfully!');
+            };
+
+            const getDateRangeText = () => {
+                switch (filters.dateRange) {
+                    case 'last_7_days': return 'Last 7 Days';
+                    case 'last_30_days': return 'Last 30 Days';
+                    case 'last_3_months': return 'Last 3 Months';
+                    case 'last_6_months': return 'Last 6 Months';
+                    case 'last_year': return 'Last Year';
+                    default: return 'Last 30 Days';
+                }
+            };
+
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                if (amount >= 1000000000) {
+                    return `SLL ${(amount / 1000000000).toFixed(1)}B`;
+                } else if (amount >= 1000000) {
+                    return `SLL ${(amount / 1000000).toFixed(1)}M`;
+                } else {
+                    return `SLL ${amount.toLocaleString()}`;
+                }
+            };
+
+            // Generate preview when report type changes
+            useEffect(() => {
+                if (reportData[selectedReportType]) {
+                    generateReportPreview();
+                }
+            }, [selectedReportType, reportData]);
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading reporting system...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Loading Overlay */}
+                    {isGenerating && (
+                        <div className="loading-overlay">
+                            <div className="loading-content">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                                <h3 className="text-lg font-semibold mb-2">Generating Report...</h3>
+                                <div className="w-64 bg-gray-200 rounded-full h-2 mb-2">
+                                    <div 
+                                        className="export-progress bg-blue-500 h-2 rounded-full"
+                                        style={{ width: `${progress}%` }}
+                                    ></div>
+                                </div>
+                                <p className="text-sm text-gray-600">{progress}% complete</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Header */}
+                    <header className="reports-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <span className="text-4xl">📊</span>
+                                    <div>
+                                        <h1 className="text-3xl font-bold">Advanced Reporting</h1>
+                                        <p className="text-blue-100 mt-2">
+                                            Generate comprehensive reports with PDF/Excel export capabilities
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-blue-100 text-sm">
+                                        User: {currentUser?.full_name || 'Loading...'}
+                                    </div>
+                                    <div className="text-blue-100 text-sm">
+                                        Access Level: {currentUser?.role || 'Loading...'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Report Type Selection */}
+                        <div className="mb-8">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Report Type</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {reportTypes.map(reportType => (
+                                    <div
+                                        key={reportType.id}
+                                        className={`report-card p-6 bg-white rounded-lg shadow ${
+                                            selectedReportType === reportType.id ? 'selected' : ''
+                                        }`}
+                                        onClick={() => setSelectedReportType(reportType.id)}
+                                    >
+                                        <div className="flex items-start gap-4">
+                                            <span className="text-3xl">{reportType.icon}</span>
+                                            <div className="flex-1">
+                                                <h3 className="font-semibold text-lg mb-2">{reportType.title}</h3>
+                                                <p className="text-gray-600 text-sm mb-3">{reportType.description}</p>
+                                                
+                                                <div className="mb-3">
+                                                    <h4 className="font-medium text-sm mb-1">Key Metrics:</h4>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {reportType.metrics.map((metric, index) => (
+                                                            <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                                                {metric}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div>
+                                                    <h4 className="font-medium text-sm mb-1">Features:</h4>
+                                                    <ul className="text-xs text-gray-600 space-y-1">
+                                                        {reportType.features.map((feature, index) => (
+                                                            <li key={index} className="flex items-center gap-1">
+                                                                <span className="text-green-500">✓</span>
+                                                                {feature}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Report Configuration */}
+                            <div className="lg:col-span-1">
+                                <div className="bg-white rounded-lg shadow p-6 mb-6">
+                                    <h3 className="text-lg font-semibold mb-4">Report Configuration</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Date Range
+                                            </label>
+                                            <select
+                                                className="w-full p-2 border border-gray-300 rounded-md"
+                                                value={filters.dateRange}
+                                                onChange={(e) => setFilters({...filters, dateRange: e.target.value})}
+                                            >
+                                                <option value="last_7_days">Last 7 Days</option>
+                                                <option value="last_30_days">Last 30 Days</option>
+                                                <option value="last_3_months">Last 3 Months</option>
+                                                <option value="last_6_months">Last 6 Months</option>
+                                                <option value="last_year">Last Year</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Project Status
+                                            </label>
+                                            <select
+                                                className="w-full p-2 border border-gray-300 rounded-md"
+                                                value={filters.status}
+                                                onChange={(e) => setFilters({...filters, status: e.target.value})}
+                                            >
+                                                <option value="all">All Statuses</option>
+                                                <option value="active">Active</option>
+                                                <option value="completed">Completed</option>
+                                                <option value="on_hold">On Hold</option>
+                                                <option value="planning">Planning</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Budget Range
+                                            </label>
+                                            <select
+                                                className="w-full p-2 border border-gray-300 rounded-md"
+                                                value={filters.budget_range}
+                                                onChange={(e) => setFilters({...filters, budget_range: e.target.value})}
+                                            >
+                                                <option value="all">All Budgets</option>
+                                                <option value="small">Small (< SLL 1B)</option>
+                                                <option value="medium">Medium (SLL 1B - 10B)</option>
+                                                <option value="large">Large (> SLL 10B)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Export Actions */}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <h3 className="text-lg font-semibold mb-4">Export Options</h3>
+                                    
+                                    <div className="space-y-3">
+                                        <button
+                                            onClick={() => generateReport('pdf')}
+                                            className="w-full flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors"
+                                            disabled={isGenerating}
+                                        >
+                                            📄 Generate PDF Report
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => generateReport('excel')}
+                                            className="w-full flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
+                                            disabled={isGenerating}
+                                        >
+                                            📊 Generate Excel Report
+                                        </button>
+                                        
+                                        <button
+                                            onClick={scheduleReport}
+                                            className="w-full flex items-center justify-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors"
+                                            disabled={isGenerating}
+                                        >
+                                            ⏰ Schedule Report
+                                        </button>
+                                        
+                                        <button
+                                            onClick={generateReportPreview}
+                                            className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                                        >
+                                            👁️ Preview Report
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Report Preview */}
+                            <div className="lg:col-span-2">
+                                <div className="bg-white rounded-lg shadow">
+                                    <div className="p-6 border-b">
+                                        <h3 className="text-lg font-semibold">Report Preview</h3>
+                                        <p className="text-gray-600 text-sm">Preview your report before generating the final document</p>
+                                    </div>
+                                    
+                                    <div className="p-6">
+                                        {reportPreview || (
+                                            <div className="text-center text-gray-500 py-12">
+                                                <span className="text-6xl mb-4 block">📋</span>
+                                                <p>Select a report type and click "Preview Report" to see the preview</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Scheduled Reports */}
+                        <div className="mt-8 bg-white rounded-lg shadow">
+                            <div className="p-6 border-b">
+                                <h3 className="text-lg font-semibold">Scheduled Reports</h3>
+                                <p className="text-gray-600 text-sm">Automated report generation and delivery</p>
+                            </div>
+                            
+                            <div className="p-6">
+                                {scheduledReports.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {scheduledReports.map(report => (
+                                            <div key={report.id} className="schedule-item">
+                                                <div className="flex-1">
+                                                    <h4 className="font-medium">{report.name}</h4>
+                                                    <p className="text-sm text-gray-600">
+                                                        {report.schedule} • {report.format} format • 
+                                                        Next run: {report.next_run.toLocaleDateString()}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">
+                                                        Recipients: {report.recipients.join(', ')}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2 py-1 rounded text-xs ${'bg-green-100 text-green-800'}`}>
+                                                        Active
+                                                    </span>
+                                                    <button className="text-gray-400 hover:text-red-500">
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-gray-500 py-8">
+                                        <span className="text-4xl mb-2 block">⏰</span>
+                                        <p>No scheduled reports configured</p>
+                                        <p className="text-sm">Click "Schedule Report" to set up automated reporting</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<AdvancedReporting />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Advanced Reporting System: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

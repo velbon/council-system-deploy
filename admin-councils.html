@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Council Management</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .admin-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 2xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .form-textarea { resize: vertical; min-height: 100px; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #3b82f6; color: white; } .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #6b7280; color: white; } .btn-secondary:hover { background: #4b5563; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; } .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .table th { background: #f9fafb; font-weight: 600; }
+        @media (max-width: 768px) {
+            .modal-content { margin: 1rem; max-width: calc(100vw - 2rem); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading Council Management...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const CouncilManagement = () => {
+            const [councils, setCouncils] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [showModal, setShowModal] = useState(false);
+            const [editingCouncil, setEditingCouncil] = useState(null);
+            const [currentUser, setCurrentUser] = useState(null);
+
+            // Demo councils data
+            const DEMO_COUNCILS = [
+                {
+                    id: 1,
+                    name: 'Freetown City Council',
+                    district: 'Western Area Urban',
+                    region: 'Western Area',
+                    established_year: 2004,
+                    population: 1200000,
+                    area_km2: 357,
+                    mayor_name: 'Yvonne Aki-Sawyerr',
+                    contact_email: 'info@fcc.gov.sl',
+                    contact_phone: '+232-22-241-356',
+                    address: 'Wallace Johnson Street, Freetown',
+                    website: 'https://fcc.gov.sl',
+                    is_active: true,
+                    created_at: '2024-01-10T00:00:00Z'
+                },
+                {
+                    id: 2,
+                    name: 'Bo City Council',
+                    district: 'Bo District',
+                    region: 'Southern Province',
+                    established_year: 2004,
+                    population: 174369,
+                    area_km2: 44,
+                    mayor_name: 'Harold Tucker',
+                    contact_email: 'info@bcc.gov.sl',
+                    contact_phone: '+232-32-272-345',
+                    address: 'Damballa Road, Bo',
+                    website: 'https://bcc.gov.sl',
+                    is_active: true,
+                    created_at: '2024-01-10T00:00:00Z'
+                },
+                {
+                    id: 3,
+                    name: 'Kenema City Council',
+                    district: 'Kenema District',
+                    region: 'Eastern Province',
+                    established_year: 2004,
+                    population: 200354,
+                    area_km2: 78,
+                    mayor_name: 'Joseph Momoh',
+                    contact_email: 'info@kcc.gov.sl',
+                    contact_phone: '+232-32-365-789',
+                    address: 'Hangha Road, Kenema',
+                    website: 'https://kcc.gov.sl',
+                    is_active: true,
+                    created_at: '2024-01-10T00:00:00Z'
+                },
+                {
+                    id: 4,
+                    name: 'Makeni City Council',
+                    district: 'Bombali District',
+                    region: 'Northern Province',
+                    established_year: 2004,
+                    population: 87679,
+                    area_km2: 36,
+                    mayor_name: 'Sunkarie Kabba-Kamara',
+                    contact_email: 'info@mcc.gov.sl',
+                    contact_phone: '+232-32-456-123',
+                    address: 'Rogbere Road, Makeni',
+                    website: 'https://mcc.gov.sl',
+                    is_active: true,
+                    created_at: '2024-01-10T00:00:00Z'
+                },
+                {
+                    id: 5,
+                    name: 'Koidu New Sembehun City Council',
+                    district: 'Kono District',
+                    region: 'Eastern Province',
+                    established_year: 2017,
+                    population: 124662,
+                    area_km2: 52,
+                    mayor_name: 'Saa Emmanuel Yankuba',
+                    contact_email: 'info@knscc.gov.sl',
+                    contact_phone: '+232-32-789-456',
+                    address: 'Koidu-New Sembehun',
+                    website: 'https://knscc.gov.sl',
+                    is_active: true,
+                    created_at: '2024-01-10T00:00:00Z'
+                }
+            ];
+
+            // Check authentication
+            useEffect(() => {
+                const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                if (!user.id || user.role !== 'admin') {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                setCurrentUser(user);
+            }, []);
+
+            // Load demo data
+            useEffect(() => {
+                setCouncils(DEMO_COUNCILS);
+                setLoading(false);
+                showMessage('Demo mode - using sample council data');
+            }, []);
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            const createCouncil = (councilData) => {
+                const newCouncil = {
+                    ...councilData,
+                    id: councils.length + 1,
+                    created_at: new Date().toISOString(),
+                    is_active: true
+                };
+                setCouncils([newCouncil, ...councils]);
+                showMessage("Council created successfully!");
+                setShowModal(false);
+            };
+
+            const updateCouncil = (councilData) => {
+                setCouncils(councils.map(council => 
+                    council.id === editingCouncil.id 
+                        ? { ...council, ...councilData }
+                        : council
+                ));
+                showMessage("Council updated successfully!");
+                setShowModal(false);
+                setEditingCouncil(null);
+            };
+
+            const toggleCouncilStatus = (councilId) => {
+                setCouncils(councils.map(council => 
+                    council.id === councilId 
+                        ? { ...council, is_active: !council.is_active }
+                        : council
+                ));
+                showMessage("Council status updated successfully!");
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            };
+
+            const formatNumber = (number) => {
+                return new Intl.NumberFormat().format(number);
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Council Management...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="admin-header text-white p-6">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold">🏛️ Council Management</h1>
+                                <p className="text-blue-100 mt-2">Manage city and district councils</p>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <a 
+                                    href="admin-enhanced.html" 
+                                    className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                                >
+                                    🏠 Admin Dashboard
+                                </a>
+                                <div className="text-sm">
+                                    Welcome, {currentUser?.name || 'Admin'}
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        localStorage.removeItem('ppms_user');
+                                        window.location.href = 'login.html';
+                                    }}
+                                    className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                                >
+                                    🚪 Logout
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                            <div className="card">
+                                <div className="text-2xl font-bold text-blue-600">{councils.length}</div>
+                                <div className="text-gray-600">Total Councils</div>
+                            </div>
+                            <div className="card">
+                                <div className="text-2xl font-bold text-green-600">
+                                    {councils.filter(c => c.is_active).length}
+                                </div>
+                                <div className="text-gray-600">Active Councils</div>
+                            </div>
+                            <div className="card">
+                                <div className="text-2xl font-bold text-purple-600">
+                                    {formatNumber(councils.reduce((sum, c) => sum + c.population, 0))}
+                                </div>
+                                <div className="text-gray-600">Total Population</div>
+                            </div>
+                            <div className="card">
+                                <div className="text-2xl font-bold text-orange-600">
+                                    {formatNumber(councils.reduce((sum, c) => sum + c.area_km2, 0))}
+                                </div>
+                                <div className="text-gray-600">Total Area (km²)</div>
+                            </div>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">Councils Directory</h2>
+                            <button
+                                onClick={() => {
+                                    setEditingCouncil(null);
+                                    setShowModal(true);
+                                }}
+                                className="btn btn-primary"
+                            >
+                                ➕ Add New Council
+                            </button>
+                        </div>
+
+                        {/* Councils Table */}
+                        <div className="bg-white rounded-lg shadow overflow-hidden">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Council Name</th>
+                                        <th>District/Region</th>
+                                        <th>Mayor</th>
+                                        <th>Population</th>
+                                        <th>Area (km²)</th>
+                                        <th>Status</th>
+                                        <th>Established</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {councils.map(council => (
+                                        <tr key={council.id}>
+                                            <td>
+                                                <div>
+                                                    <div className="font-medium">{council.name}</div>
+                                                    <div className="text-sm text-gray-500">{council.contact_email}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div className="font-medium">{council.district}</div>
+                                                    <div className="text-sm text-gray-500">{council.region}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div className="font-medium">{council.mayor_name}</div>
+                                                    <div className="text-sm text-gray-500">{council.contact_phone}</div>
+                                                </div>
+                                            </td>
+                                            <td>{formatNumber(council.population)}</td>
+                                            <td>{formatNumber(council.area_km2)}</td>
+                                            <td>
+                                                <span className={`badge ${council.is_active ? 'badge-green' : 'badge-red'}`}>
+                                                    {council.is_active ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td>{council.established_year}</td>
+                                            <td>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingCouncil(council);
+                                                            setShowModal(true);
+                                                        }}
+                                                        className="btn btn-sm btn-outline"
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleCouncilStatus(council.id)}
+                                                        className={`btn btn-sm ${council.is_active ? 'btn-danger' : 'btn-success'}`}
+                                                    >
+                                                        {council.is_active ? '⏸️ Deactivate' : '▶️ Activate'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Modal */}
+                    {showModal && <CouncilModal />}
+                </div>
+            );
+
+            // Modal Component
+            function CouncilModal() {
+                const [formData, setFormData] = useState(
+                    editingCouncil || {
+                        name: '',
+                        district: '',
+                        region: '',
+                        established_year: new Date().getFullYear(),
+                        population: '',
+                        area_km2: '',
+                        mayor_name: '',
+                        contact_email: '',
+                        contact_phone: '',
+                        address: '',
+                        website: ''
+                    }
+                );
+
+                const regions = [
+                    'Western Area',
+                    'Northern Province',
+                    'Southern Province',
+                    'Eastern Province'
+                ];
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (editingCouncil) {
+                        updateCouncil(formData);
+                    } else {
+                        createCouncil(formData);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                {editingCouncil ? 'Edit Council' : 'Add New Council'}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">Council Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">District *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.district}
+                                        onChange={(e) => setFormData({...formData, district: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Region *</label>
+                                    <select
+                                        className="form-input"
+                                        value={formData.region}
+                                        onChange={(e) => setFormData({...formData, region: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Region</option>
+                                        {regions.map(region => (
+                                            <option key={region} value={region}>{region}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Established Year *</label>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        value={formData.established_year}
+                                        onChange={(e) => setFormData({...formData, established_year: parseInt(e.target.value)})}
+                                        min="1960"
+                                        max={new Date().getFullYear()}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Population *</label>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        value={formData.population}
+                                        onChange={(e) => setFormData({...formData, population: parseInt(e.target.value)})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Area (km²) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="form-input"
+                                        value={formData.area_km2}
+                                        onChange={(e) => setFormData({...formData, area_km2: parseFloat(e.target.value)})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Mayor Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.mayor_name}
+                                        onChange={(e) => setFormData({...formData, mayor_name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Contact Email *</label>
+                                    <input
+                                        type="email"
+                                        className="form-input"
+                                        value={formData.contact_email}
+                                        onChange={(e) => setFormData({...formData, contact_email: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Contact Phone</label>
+                                    <input
+                                        type="tel"
+                                        className="form-input"
+                                        value={formData.contact_phone}
+                                        onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Website</label>
+                                    <input
+                                        type="url"
+                                        className="form-input"
+                                        value={formData.website}
+                                        onChange={(e) => setFormData({...formData, website: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="md:col-span-2 form-group">
+                                    <label className="form-label">Address *</label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            setEditingCouncil(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        {editingCouncil ? 'Update' : 'Create'} Council
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        ReactDOM.render(<CouncilManagement />, document.getElementById('root'));
+    </script>
+</body>
+</html>

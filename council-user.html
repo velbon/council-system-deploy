@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Council User Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .council-header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 4xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .form-textarea { resize: vertical; min-height: 80px; }
+        .form-select { background: white; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #3b82f6; color: white; } .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-warning { background: #f59e0b; color: white; } .btn-warning:hover { background: #d97706; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .file-upload { border: 2px dashed #d1d5db; border-radius: 0.5rem; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .file-upload:hover { border-color: #3b82f6; background: #f8fafc; }
+        .file-upload.drag-over { border-color: #10b981; background: #ecfdf5; }
+        .milestone-card { border-left: 4px solid #3b82f6; margin-bottom: 1rem; }
+        .milestone-card.completed { border-left-color: #10b981; }
+        .milestone-card.delayed { border-left-color: #ef4444; }
+        .progress-ring { transform: rotate(-90deg); }
+        .progress-ring-circle { transition: stroke-dashoffset 0.35s; fill: transparent; stroke: #e5e7eb; stroke-width: 4; }
+        .progress-ring-fill { stroke: #3b82f6; stroke-width: 4; fill: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading Council User Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Mock current user - in real implementation, get from auth
+        const CURRENT_USER = {
+            id: 'council-user-1',
+            full_name: 'John Council Manager',
+            council_id: 'freetown-council',
+            council_name: 'Freetown City Council',
+            role: 'council_user'
+        };
+
+        const CouncilUserDashboard = () => {
+            // State management
+            const [projects, setProjects] = useState([]);
+            const [milestones, setMilestones] = useState([]);
+            const [validationRequests, setValidationRequests] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [activeTab, setActiveTab] = useState("projects");
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            
+            // Modal states
+            const [showUpdateModal, setShowUpdateModal] = useState(false);
+            const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+            const [showDocumentModal, setShowDocumentModal] = useState(false);
+            const [selectedProject, setSelectedProject] = useState(null);
+            const [uploadingFile, setUploadingFile] = useState(false);
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    } else {
+                        setMessage("❌ Supabase library not loaded");
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Supabase initialization error:', error);
+                    setMessage("❌ Error initializing Supabase client");
+                    setLoading(false);
+                }
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchData();
+                }
+            }, [supabaseClient]);
+
+            const fetchData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchProjects(),
+                        fetchMilestones(),
+                        fetchValidationRequests()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    setMessage("❌ Error loading data");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchProjects = async () => {
+                // Fetch projects for user's council
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .select(`
+                        *,
+                        councils(name),
+                        kpis(*)
+                    `)
+                    .eq('council_id', CURRENT_USER.council_id)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setProjects(data || []);
+            };
+
+            const fetchMilestones = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_milestones')
+                    .select(`
+                        *,
+                        projects!inner(title, council_id)
+                    `)
+                    .eq('projects.council_id', CURRENT_USER.council_id)
+                    .order('target_date', { ascending: true });
+                if (error) throw error;
+                setMilestones(data || []);
+            };
+
+            const fetchValidationRequests = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_validations')
+                    .select(`
+                        *,
+                        projects!inner(title, council_id)
+                    `)
+                    .eq('projects.council_id', CURRENT_USER.council_id)
+                    .eq('requested_by', CURRENT_USER.id)
+                    .order('requested_at', { ascending: false });
+                if (error) throw error;
+                setValidationRequests(data || []);
+            };
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            // Submit update for validation
+            const submitUpdate = async (updateData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('project_validations')
+                        .insert([{
+                            project_id: selectedProject.id,
+                            update_type: updateData.type,
+                            update_data: updateData.data,
+                            requested_by: CURRENT_USER.id
+                        }]);
+                    if (error) throw error;
+                    
+                    showMessage("Update submitted for validation!");
+                    setShowUpdateModal(false);
+                    setSelectedProject(null);
+                    fetchValidationRequests();
+                } catch (error) {
+                    showMessage(`Error submitting update: ${error.message}`, true);
+                }
+            };
+
+            // Create milestone
+            const createMilestone = async (milestoneData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('project_milestones')
+                        .insert([{
+                            ...milestoneData,
+                            project_id: selectedProject.id,
+                            created_by: CURRENT_USER.id
+                        }]);
+                    if (error) throw error;
+                    
+                    showMessage("Milestone created successfully!");
+                    setShowMilestoneModal(false);
+                    setSelectedProject(null);
+                    fetchMilestones();
+                } catch (error) {
+                    showMessage(`Error creating milestone: ${error.message}`, true);
+                }
+            };
+
+            // Upload document
+            const uploadDocument = async (file, documentType) => {
+                try {
+                    setUploadingFile(true);
+                    
+                    // Upload file to Supabase Storage
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${selectedProject.id}-${Date.now()}.${fileExt}`;
+                    const filePath = `documents/${fileName}`;
+
+                    const { error: uploadError } = await supabaseClient.storage
+                        .from('project-documents')
+                        .upload(filePath, file);
+                    
+                    if (uploadError) throw uploadError;
+
+                    // Create document record
+                    const { error } = await supabaseClient
+                        .from('project_documents')
+                        .insert([{
+                            project_id: selectedProject.id,
+                            document_name: file.name,
+                            document_type: documentType,
+                            file_path: filePath,
+                            file_size: file.size,
+                            mime_type: file.type,
+                            uploaded_by: CURRENT_USER.id
+                        }]);
+                    if (error) throw error;
+                    
+                    showMessage("Document uploaded successfully!");
+                    setShowDocumentModal(false);
+                    setSelectedProject(null);
+                } catch (error) {
+                    showMessage(`Error uploading document: ${error.message}`, true);
+                } finally {
+                    setUploadingFile(false);
+                }
+            };
+
+            // Utility functions
+            const getStatusBadgeClass = (status) => {
+                switch (status) {
+                    case 'Active': case 'completed': case 'approved': return 'badge-green';
+                    case 'Planning': case 'pending': case 'in_progress': return 'badge-yellow';
+                    case 'Delayed': case 'rejected': return 'badge-red';
+                    default: return 'badge-blue';
+                }
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            };
+
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                return `SLL ${Number(amount).toLocaleString()}`;
+            };
+
+            // Progress Ring Component
+            const ProgressRing = ({ percentage, size = 60 }) => {
+                const radius = (size - 8) / 2;
+                const circumference = radius * 2 * Math.PI;
+                const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+                return (
+                    <svg width={size} height={size} className="progress-ring">
+                        <circle
+                            className="progress-ring-circle"
+                            stroke="#e5e7eb"
+                            strokeWidth="4"
+                            fill="transparent"
+                            r={radius}
+                            cx={size / 2}
+                            cy={size / 2}
+                        />
+                        <circle
+                            className="progress-ring-fill"
+                            stroke={percentage >= 100 ? "#10b981" : "#3b82f6"}
+                            strokeWidth="4"
+                            fill="transparent"
+                            r={radius}
+                            cx={size / 2}
+                            cy={size / 2}
+                            style={{
+                                strokeDasharray: circumference,
+                                strokeDashoffset: strokeDashoffset
+                            }}
+                        />
+                        <text
+                            x={size / 2}
+                            y={size / 2}
+                            textAnchor="middle"
+                            dy="0.3em"
+                            fontSize="12"
+                            fontWeight="600"
+                            fill="#374151"
+                        >
+                            {percentage}%
+                        </text>
+                    </svg>
+                );
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Council Dashboard...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="council-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <h1 className="text-3xl font-bold">Council User Dashboard</h1>
+                            <p className="text-green-100 mt-2">
+                                Welcome, {CURRENT_USER.full_name} • {CURRENT_USER.council_name}
+                            </p>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Tabs */}
+                        <div className="bg-white rounded-lg shadow mb-6">
+                            <div className="border-b border-gray-200">
+                                <nav className="-mb-px flex space-x-8 px-6">
+                                    {[
+                                        { id: 'projects', label: 'My Projects', icon: '📊' },
+                                        { id: 'milestones', label: 'Milestones', icon: '🎯' },
+                                        { id: 'validations', label: 'Validation Status', icon: '✅' }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                                activeTab === tab.id
+                                                    ? 'border-green-500 text-green-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tab.icon} {tab.label}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'projects' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">My Projects</h2>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {projects.map(project => (
+                                        <div key={project.id} className="card">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <h3 className="text-lg font-semibold text-gray-900">{project.title}</h3>
+                                                <ProgressRing percentage={project.completion_percentage || 0} />
+                                            </div>
+                                            
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                <span className={`badge ${getStatusBadgeClass(project.status)}`}>
+                                                    {project.status}
+                                                </span>
+                                                <span className="badge badge-blue">
+                                                    {project.phase}
+                                                </span>
+                                            </div>
+
+                                            <div className="text-sm space-y-2 mb-4">
+                                                <div>
+                                                    <span className="font-medium">Budget:</span> {formatSLL(project.budget)}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">KPIs:</span> {project.kpis?.length || 0} defined
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedProject(project);
+                                                        setShowUpdateModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-primary"
+                                                >
+                                                    📝 Update Status
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedProject(project);
+                                                        setShowMilestoneModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-success"
+                                                >
+                                                    🎯 Add Milestone
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedProject(project);
+                                                        setShowDocumentModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-outline"
+                                                >
+                                                    📄 Upload Doc
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'milestones' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Project Milestones</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {milestones.map(milestone => (
+                                        <div key={milestone.id} className={`card milestone-card ${milestone.status}`}>
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">{milestone.milestone_name}</h3>
+                                                    <p className="text-gray-600">{milestone.projects.title}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`badge ${getStatusBadgeClass(milestone.status)}`}>
+                                                        {milestone.status}
+                                                    </span>
+                                                    <div className="text-sm text-gray-500 mt-1">
+                                                        Due: {formatDate(milestone.target_date)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {milestone.description && (
+                                                <p className="text-gray-700 text-sm mb-3">{milestone.description}</p>
+                                            )}
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <div className="text-sm">
+                                                    <span className="font-medium">Progress:</span> {milestone.completion_percentage}%
+                                                </div>
+                                                <span className={`badge ${getStatusBadgeClass(milestone.validation_status)}`}>
+                                                    {milestone.validation_status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'validations' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Validation Requests</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {validationRequests.map(request => (
+                                        <div key={request.id} className="card">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">{request.projects.title}</h3>
+                                                    <p className="text-gray-600">{request.update_type}</p>
+                                                </div>
+                                                <span className={`badge ${getStatusBadgeClass(request.validation_status)}`}>
+                                                    {request.validation_status}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="text-sm text-gray-500 mb-3">
+                                                Submitted: {formatDate(request.requested_at)}
+                                            </div>
+                                            
+                                            {request.validation_notes && (
+                                                <div className="bg-gray-100 p-3 rounded text-sm">
+                                                    <strong>Validator Notes:</strong> {request.validation_notes}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modals */}
+                    {showUpdateModal && <UpdateModal />}
+                    {showMilestoneModal && <MilestoneModal />}
+                    {showDocumentModal && <DocumentModal />}
+                </div>
+            );
+
+            // Modal Components
+            function UpdateModal() {
+                const [updateType, setUpdateType] = useState('status_change');
+                const [updateData, setUpdateData] = useState({});
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    submitUpdate({
+                        type: updateType,
+                        data: updateData
+                    });
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                Submit Update for {selectedProject?.title}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label className="form-label">Update Type</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={updateType}
+                                        onChange={(e) => setUpdateType(e.target.value)}
+                                    >
+                                        <option value="status_change">Status Change</option>
+                                        <option value="completion_update">Completion Update</option>
+                                        <option value="budget_update">Budget Update</option>
+                                        <option value="milestone_update">Milestone Update</option>
+                                    </select>
+                                </div>
+
+                                {updateType === 'status_change' && (
+                                    <div className="form-group">
+                                        <label className="form-label">New Status</label>
+                                        <select
+                                            className="form-input form-select"
+                                            onChange={(e) => setUpdateData({...updateData, new_status: e.target.value})}
+                                        >
+                                            <option value="">Select Status</option>
+                                            <option value="Planning">Planning</option>
+                                            <option value="Active">Active</option>
+                                            <option value="On Hold">On Hold</option>
+                                            <option value="Completed">Completed</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                {updateType === 'completion_update' && (
+                                    <div className="form-group">
+                                        <label className="form-label">Completion Percentage</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            className="form-input"
+                                            onChange={(e) => setUpdateData({...updateData, completion_percentage: parseFloat(e.target.value)})}
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="form-group">
+                                    <label className="form-label">Comments</label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        rows={3}
+                                        placeholder="Add any additional comments..."
+                                        onChange={(e) => setUpdateData({...updateData, comments: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowUpdateModal(false);
+                                            setSelectedProject(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        Submit for Validation
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            function MilestoneModal() {
+                const [formData, setFormData] = useState({
+                    milestone_name: '',
+                    description: '',
+                    target_date: '',
+                    completion_percentage: 0
+                });
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    createMilestone(formData);
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                Add Milestone for {selectedProject?.title}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label className="form-label">Milestone Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.milestone_name}
+                                        onChange={(e) => setFormData({...formData, milestone_name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Description</label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                        rows={3}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Target Date *</label>
+                                    <input
+                                        type="date"
+                                        className="form-input"
+                                        value={formData.target_date}
+                                        onChange={(e) => setFormData({...formData, target_date: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Initial Completion %</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        className="form-input"
+                                        value={formData.completion_percentage}
+                                        onChange={(e) => setFormData({...formData, completion_percentage: parseFloat(e.target.value)})}
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowMilestoneModal(false);
+                                            setSelectedProject(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-success">
+                                        Create Milestone
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            function DocumentModal() {
+                const [documentType, setDocumentType] = useState('report');
+                const [dragOver, setDragOver] = useState(false);
+                const [selectedFile, setSelectedFile] = useState(null);
+
+                const handleFileSelect = (file) => {
+                    setSelectedFile(file);
+                };
+
+                const handleDrop = (e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    const files = Array.from(e.dataTransfer.files);
+                    if (files.length > 0) {
+                        handleFileSelect(files[0]);
+                    }
+                };
+
+                const handleUpload = () => {
+                    if (selectedFile) {
+                        uploadDocument(selectedFile, documentType);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                Upload Document for {selectedProject?.title}
+                            </h3>
+                            
+                            <div className="form-group">
+                                <label className="form-label">Document Type</label>
+                                <select
+                                    className="form-input form-select"
+                                    value={documentType}
+                                    onChange={(e) => setDocumentType(e.target.value)}
+                                >
+                                    <option value="report">Progress Report</option>
+                                    <option value="invoice">Invoice</option>
+                                    <option value="photo">Photo Evidence</option>
+                                    <option value="contract">Contract</option>
+                                    <option value="permit">Permit</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                            <div
+                                className={`file-upload ${dragOver ? 'drag-over' : ''}`}
+                                onDrop={handleDrop}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    setDragOver(true);
+                                }}
+                                onDragLeave={() => setDragOver(false)}
+                                onClick={() => document.getElementById('fileInput').click()}
+                            >
+                                <input
+                                    id="fileInput"
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                                    onChange={(e) => {
+                                        if (e.target.files[0]) {
+                                            handleFileSelect(e.target.files[0]);
+                                        }
+                                    }}
+                                />
+                                
+                                {selectedFile ? (
+                                    <div className="text-center">
+                                        <div className="text-2xl mb-2">📄</div>
+                                        <p className="font-medium">{selectedFile.name}</p>
+                                        <p className="text-sm text-gray-500">
+                                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="text-center">
+                                        <div className="text-4xl mb-2">📁</div>
+                                        <p className="font-medium">Drop files here or click to browse</p>
+                                        <p className="text-sm text-gray-500">PDF, DOC, XLS, JPG, PNG files</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    onClick={() => {
+                                        setShowDocumentModal(false);
+                                        setSelectedProject(null);
+                                        setSelectedFile(null);
+                                    }}
+                                    className="btn btn-outline"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleUpload}
+                                    disabled={!selectedFile || uploadingFile}
+                                    className="btn btn-success"
+                                >
+                                    {uploadingFile ? '📤 Uploading...' : '📤 Upload Document'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<CouncilUserDashboard />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Council User Dashboard: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

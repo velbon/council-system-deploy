@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Auditor Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .auditor-header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 6xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1); }
+        .form-select { background: white; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #dc2626; color: white; } .btn-primary:hover { background: #b91c1c; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-gray { background: #f3f4f6; color: #374151; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .stat-card { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .audit-log-entry { border-left: 4px solid #dc2626; padding: 1rem; margin-bottom: 0.5rem; background: white; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .audit-log-entry.create { border-left-color: #10b981; }
+        .audit-log-entry.update { border-left-color: #f59e0b; }
+        .audit-log-entry.delete { border-left-color: #ef4444; }
+        .audit-log-entry.validation { border-left-color: #8b5cf6; }
+        .project-row { transition: all 0.2s; }
+        .project-row:hover { background: #f8fafc; }
+        .table-container { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; background: white; border-radius: 0.5rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .data-table th { background: #f9fafb; padding: 0.75rem; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; }
+        .data-table td { padding: 0.75rem; border-bottom: 1px solid #e5e7eb; }
+        .data-table tr:last-child td { border-bottom: none; }
+        .filter-bar { background: white; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .chart-container { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .progress-bar { width: 100%; background: #e5e7eb; border-radius: 9999px; height: 8px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
+        .progress-fill.completed { background: #10b981; }
+        .progress-fill.delayed { background: #ef4444; }
+        .export-button { background: #059669; color: white; }
+        .export-button:hover { background: #047857; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading Auditor Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AuditorDashboard = () => {
+            // Authentication state
+            const [currentUser, setCurrentUser] = useState(null);
+
+            // State management
+            const [projects, setProjects] = useState([]);
+            const [auditLogs, setAuditLogs] = useState([]);
+            const [validations, setValidations] = useState([]);
+            const [milestones, setMilestones] = useState([]);
+            const [documents, setDocuments] = useState([]);
+            const [statistics, setStatistics] = useState({});
+            const [councils, setCouncils] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [activeTab, setActiveTab] = useState("overview");
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            
+            // Filter states
+            const [filters, setFilters] = useState({
+                council: '',
+                status: '',
+                dateRange: 'all',
+                searchTerm: ''
+            });
+
+            // Modal states
+            const [showDetailModal, setShowDetailModal] = useState(false);
+            const [selectedItem, setSelectedItem] = useState(null);
+
+            // Check authentication
+            useEffect(() => {
+                try {
+                    const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                    console.log('User from localStorage:', user);
+                    if (!user.id) {
+                        console.log('No user found, redirecting to login');
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    console.log('User authenticated:', user);
+                    setCurrentUser(user);
+                } catch (error) {
+                    console.error('Error parsing user data:', error);
+                    window.location.href = 'login.html';
+                }
+            }, []);
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    } else {
+                        setMessage("❌ Supabase library not loaded");
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Supabase initialization error:', error);
+                    setMessage("❌ Error initializing Supabase client");
+                    setLoading(false);
+                }
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchAllData();
+                }
+            }, [supabaseClient]);
+
+            const fetchAllData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchProjects(),
+                        fetchAuditLogs(),
+                        fetchValidations(),
+                        fetchMilestones(),
+                        fetchDocuments(),
+                        fetchCouncils(),
+                        fetchStatistics()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    setMessage("❌ Error loading data");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchProjects = async () => {
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .select(`
+                        *,
+                        councils(name),
+                        kpis(*)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setProjects(data || []);
+            };
+
+            const fetchAuditLogs = async () => {
+                const { data, error } = await supabaseClient
+                    .from('audit_logs')
+                    .select(`
+                        *,
+                        system_users!user_id(full_name)
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+                if (error) throw error;
+                setAuditLogs(data || []);
+            };
+
+            const fetchValidations = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_validations')
+                    .select(`
+                        *,
+                        projects(title),
+                        councils!inner(name)
+                    `)
+                    .order('requested_at', { ascending: false });
+                if (error) throw error;
+                setValidations(data || []);
+            };
+
+            const fetchMilestones = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_milestones')
+                    .select(`
+                        *,
+                        projects(title),
+                        councils!inner(name)
+                    `)
+                    .order('target_date', { ascending: true });
+                if (error) throw error;
+                setMilestones(data || []);
+            };
+
+            const fetchDocuments = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_documents')
+                    .select(`
+                        *,
+                        projects(title),
+                        councils!inner(name)
+                    `)
+                    .order('uploaded_at', { ascending: false });
+                if (error) throw error;
+                setDocuments(data || []);
+            };
+
+            const fetchCouncils = async () => {
+                const { data, error } = await supabaseClient
+                    .from('councils')
+                    .select('*')
+                    .order('name');
+                if (error) throw error;
+                setCouncils(data || []);
+            };
+
+            const fetchStatistics = async () => {
+                // Calculate comprehensive statistics
+                const totalProjects = projects.length;
+                const activeProjects = projects.filter(p => p.status === 'Active').length;
+                const completedProjects = projects.filter(p => p.status === 'Completed').length;
+                const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
+                const totalSpent = projects.reduce((sum, p) => sum + (p.spent_amount || 0), 0);
+                
+                const pendingValidations = validations.filter(v => v.validation_status === 'pending').length;
+                const approvedValidations = validations.filter(v => v.validation_status === 'approved').length;
+                const rejectedValidations = validations.filter(v => v.validation_status === 'rejected').length;
+                
+                const overdueMilestones = milestones.filter(m => {
+                    const now = new Date();
+                    const targetDate = new Date(m.target_date);
+                    return targetDate < now && m.status !== 'completed';
+                }).length;
+
+                setStatistics({
+                    totalProjects,
+                    activeProjects,
+                    completedProjects,
+                    totalBudget,
+                    totalSpent,
+                    budgetUtilization: totalBudget > 0 ? (totalSpent / totalBudget * 100) : 0,
+                    pendingValidations,
+                    approvedValidations,
+                    rejectedValidations,
+                    overdueMilestones,
+                    totalDocuments: documents.length,
+                    totalAuditEntries: auditLogs.length
+                });
+            };
+
+            // Re-calculate statistics when data changes
+            useEffect(() => {
+                if (projects.length > 0) {
+                    fetchStatistics();
+                }
+            }, [projects, validations, milestones, documents, auditLogs]);
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            // Export functionality
+            const exportData = (type) => {
+                let data, filename;
+                switch (type) {
+                    case 'projects':
+                        data = projects.map(p => ({
+                            Title: p.title,
+                            Council: p.councils?.name,
+                            Status: p.status,
+                            Phase: p.phase,
+                            Budget: p.budget,
+                            Spent: p.spent_amount,
+                            Completion: p.completion_percentage,
+                            'Created At': formatDate(p.created_at)
+                        }));
+                        filename = 'projects_export.csv';
+                        break;
+                    case 'validations':
+                        data = validations.map(v => ({
+                            Project: v.projects?.title,
+                            Council: v.councils?.name,
+                            'Update Type': v.update_type,
+                            Status: v.validation_status,
+                            'Requested At': formatDate(v.requested_at),
+                            'Validated At': v.validated_at ? formatDate(v.validated_at) : 'N/A'
+                        }));
+                        filename = 'validations_export.csv';
+                        break;
+                    case 'audit':
+                        data = auditLogs.map(log => ({
+                            Table: log.table_name,
+                            Action: log.action,
+                            User: log.system_users?.full_name,
+                            'Created At': formatDate(log.created_at)
+                        }));
+                        filename = 'audit_logs_export.csv';
+                        break;
+                    default:
+                        return;
+                }
+
+                // Simple CSV export
+                const csvContent = [
+                    Object.keys(data[0]).join(','),
+                    ...data.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                showMessage(`${filename} downloaded successfully!`);
+            };
+
+            // Filter functions
+            const getFilteredProjects = () => {
+                return projects.filter(project => {
+                    const matchesCouncil = !filters.council || project.council_id === filters.council;
+                    const matchesStatus = !filters.status || project.status === filters.status;
+                    const matchesSearch = !filters.searchTerm || 
+                        project.title.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+                        project.description?.toLowerCase().includes(filters.searchTerm.toLowerCase());
+                    
+                    return matchesCouncil && matchesStatus && matchesSearch;
+                });
+            };
+
+            // Utility functions
+            const getStatusBadgeClass = (status) => {
+                switch (status) {
+                    case 'Active': case 'completed': case 'approved': return 'badge-green';
+                    case 'Planning': case 'pending': case 'in_progress': return 'badge-yellow';
+                    case 'Delayed': case 'rejected': return 'badge-red';
+                    case 'On Hold': return 'badge-gray';
+                    default: return 'badge-blue';
+                }
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                return `SLL ${Number(amount).toLocaleString()}`;
+            };
+
+            const getProgressBarClass = (percentage, status) => {
+                if (status === 'Completed') return 'completed';
+                if (percentage < 50) return 'delayed';
+                return '';
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Auditor Dashboard...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="auditor-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <h1 className="text-3xl font-bold">Auditor Dashboard</h1>
+                            <p className="text-red-100 mt-2">
+                                Welcome, {currentUser?.full_name || 'Loading...'} • Financial & Compliance Audit
+                            </p>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Statistics */}
+                        <div className="stats-grid mb-6">
+                            <div className="stat-card">
+                                <div className="stat-number text-blue-600">{statistics.totalProjects || 0}</div>
+                                <div className="text-gray-600">Total Projects</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-green-600">{statistics.activeProjects || 0}</div>
+                                <div className="text-gray-600">Active Projects</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-purple-600">{formatSLL(statistics.totalBudget)}</div>
+                                <div className="text-gray-600">Total Budget</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-orange-600">{Math.round(statistics.budgetUtilization)}%</div>
+                                <div className="text-gray-600">Budget Utilization</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-yellow-600">{statistics.pendingValidations || 0}</div>
+                                <div className="text-gray-600">Pending Validations</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-red-600">{statistics.overdueMilestones || 0}</div>
+                                <div className="text-gray-600">Overdue Milestones</div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="bg-white rounded-lg shadow mb-6">
+                            <div className="border-b border-gray-200">
+                                <nav className="-mb-px flex space-x-8 px-6">
+                                    {[
+                                        { id: 'overview', label: 'Overview', icon: '📊' },
+                                        { id: 'projects', label: 'All Projects', icon: '🏗️' },
+                                        { id: 'validations', label: 'Validations', icon: '✅' },
+                                        { id: 'milestones', label: 'Milestones', icon: '🎯' },
+                                        { id: 'documents', label: 'Documents', icon: '📄' },
+                                        { id: 'audit', label: 'Audit Logs', icon: '🔍' }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                                activeTab === tab.id
+                                                    ? 'border-red-500 text-red-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tab.icon} {tab.label}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        {/* Filters */}
+                        {(activeTab === 'projects' || activeTab === 'overview') && (
+                            <div className="filter-bar">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <label className="form-label">Council</label>
+                                        <select
+                                            className="form-input form-select"
+                                            value={filters.council}
+                                            onChange={(e) => setFilters({...filters, council: e.target.value})}
+                                        >
+                                            <option value="">All Councils</option>
+                                            {councils.map(council => (
+                                                <option key={council.id} value={council.id}>{council.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Status</label>
+                                        <select
+                                            className="form-input form-select"
+                                            value={filters.status}
+                                            onChange={(e) => setFilters({...filters, status: e.target.value})}
+                                        >
+                                            <option value="">All Statuses</option>
+                                            <option value="Planning">Planning</option>
+                                            <option value="Active">Active</option>
+                                            <option value="On Hold">On Hold</option>
+                                            <option value="Completed">Completed</option>
+                                            <option value="Delayed">Delayed</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Search</label>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder="Search projects..."
+                                            value={filters.searchTerm}
+                                            onChange={(e) => setFilters({...filters, searchTerm: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="flex items-end">
+                                        <button
+                                            onClick={() => setFilters({council: '', status: '', dateRange: 'all', searchTerm: ''})}
+                                            className="btn btn-outline w-full"
+                                        >
+                                            🔄 Reset Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Tab Content */}
+                        {activeTab === 'overview' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Project Status Chart */}
+                                    <div className="chart-container">
+                                        <h3 className="text-lg font-semibold mb-4">Project Status Distribution</h3>
+                                        <div className="space-y-3">
+                                            {['Active', 'Planning', 'Completed', 'On Hold', 'Delayed'].map(status => {
+                                                const count = projects.filter(p => p.status === status).length;
+                                                const percentage = projects.length > 0 ? (count / projects.length * 100) : 0;
+                                                return (
+                                                    <div key={status} className="flex items-center gap-3">
+                                                        <div className="w-20 text-sm font-medium">{status}</div>
+                                                        <div className="flex-1">
+                                                            <div className="progress-bar">
+                                                                <div 
+                                                                    className={`progress-fill ${getProgressBarClass(percentage, status)}`}
+                                                                    style={{width: `${percentage}%`}}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-16 text-sm text-gray-600">{count} ({Math.round(percentage)}%)</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Budget Analysis */}
+                                    <div className="chart-container">
+                                        <h3 className="text-lg font-semibold mb-4">Budget Analysis</h3>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Total Budget:</span>
+                                                <span className="font-semibold">{formatSLL(statistics.totalBudget)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Total Spent:</span>
+                                                <span className="font-semibold">{formatSLL(statistics.totalSpent)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-600">Remaining:</span>
+                                                <span className="font-semibold text-green-600">
+                                                    {formatSLL(statistics.totalBudget - statistics.totalSpent)}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-gray-600">Utilization:</span>
+                                                    <span className="font-semibold">{Math.round(statistics.budgetUtilization)}%</span>
+                                                </div>
+                                                <div className="progress-bar">
+                                                    <div 
+                                                        className="progress-fill"
+                                                        style={{width: `${Math.min(statistics.budgetUtilization, 100)}%`}}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Recent Projects */}
+                                <div className="card">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">Recent Projects</h3>
+                                        <button
+                                            onClick={() => exportData('projects')}
+                                            className="btn btn-sm export-button"
+                                        >
+                                            📤 Export CSV
+                                        </button>
+                                    </div>
+                                    <div className="table-container">
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Project</th>
+                                                    <th>Council</th>
+                                                    <th>Status</th>
+                                                    <th>Budget</th>
+                                                    <th>Progress</th>
+                                                    <th>Created</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {getFilteredProjects().slice(0, 10).map(project => (
+                                                    <tr 
+                                                        key={project.id}
+                                                        className="project-row cursor-pointer"
+                                                        onClick={() => {
+                                                            setSelectedItem({...project, type: 'project'});
+                                                            setShowDetailModal(true);
+                                                        }}
+                                                    >
+                                                        <td className="font-medium">{project.title}</td>
+                                                        <td>{project.councils?.name}</td>
+                                                        <td>
+                                                            <span className={`badge ${getStatusBadgeClass(project.status)}`}>
+                                                                {project.status}
+                                                            </span>
+                                                        </td>
+                                                        <td>{formatSLL(project.budget)}</td>
+                                                        <td>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="progress-bar flex-1">
+                                                                    <div 
+                                                                        className={`progress-fill ${getProgressBarClass(project.completion_percentage, project.status)}`}
+                                                                        style={{width: `${project.completion_percentage || 0}%`}}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-xs text-gray-600 w-8">
+                                                                    {project.completion_percentage || 0}%
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-sm text-gray-600">{formatDate(project.created_at)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'projects' && (
+                            <div className="card">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">All Projects</h2>
+                                    <button
+                                        onClick={() => exportData('projects')}
+                                        className="btn export-button"
+                                    >
+                                        📤 Export Projects CSV
+                                    </button>
+                                </div>
+
+                                <div className="table-container">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>Council</th>
+                                                <th>Phase</th>
+                                                <th>Status</th>
+                                                <th>Budget</th>
+                                                <th>Spent</th>
+                                                <th>Progress</th>
+                                                <th>Created</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {getFilteredProjects().map(project => (
+                                                <tr key={project.id} className="project-row">
+                                                    <td>
+                                                        <div>
+                                                            <div className="font-medium">{project.title}</div>
+                                                            <div className="text-sm text-gray-500">{project.description?.substring(0, 50)}...</div>
+                                                        </div>
+                                                    </td>
+                                                    <td>{project.councils?.name}</td>
+                                                    <td>
+                                                        <span className="badge badge-blue">{project.phase}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${getStatusBadgeClass(project.status)}`}>
+                                                            {project.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="font-medium">{formatSLL(project.budget)}</td>
+                                                    <td>{formatSLL(project.spent_amount)}</td>
+                                                    <td>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="progress-bar flex-1">
+                                                                <div 
+                                                                    className={`progress-fill ${getProgressBarClass(project.completion_percentage, project.status)}`}
+                                                                    style={{width: `${project.completion_percentage || 0}%`}}
+                                                                />
+                                                            </div>
+                                                            <span className="text-xs text-gray-600 w-10">
+                                                                {project.completion_percentage || 0}%
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="text-sm text-gray-600">{formatDate(project.created_at)}</td>
+                                                    <td>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedItem({...project, type: 'project'});
+                                                                setShowDetailModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-outline"
+                                                        >
+                                                            👁️ View Details
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'validations' && (
+                            <div className="card">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Validation History</h2>
+                                    <button
+                                        onClick={() => exportData('validations')}
+                                        className="btn export-button"
+                                    >
+                                        📤 Export Validations CSV
+                                    </button>
+                                </div>
+
+                                <div className="table-container">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>Council</th>
+                                                <th>Update Type</th>
+                                                <th>Status</th>
+                                                <th>Requested</th>
+                                                <th>Validated</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {validations.map(validation => (
+                                                <tr key={validation.id}>
+                                                    <td>{validation.projects?.title}</td>
+                                                    <td>{validation.councils?.name}</td>
+                                                    <td>
+                                                        <span className="badge badge-blue">{validation.update_type}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${getStatusBadgeClass(validation.validation_status)}`}>
+                                                            {validation.validation_status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-sm text-gray-600">{formatDate(validation.requested_at)}</td>
+                                                    <td className="text-sm text-gray-600">
+                                                        {validation.validated_at ? formatDate(validation.validated_at) : 'N/A'}
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedItem({...validation, type: 'validation'});
+                                                                setShowDetailModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-outline"
+                                                        >
+                                                            👁️ View Details
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'milestones' && (
+                            <div className="card">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Project Milestones</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {milestones.map(milestone => (
+                                        <div key={milestone.id} className="card">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-lg">{milestone.milestone_name}</h3>
+                                                    <p className="text-gray-600">{milestone.projects?.title}</p>
+                                                    <p className="text-sm text-gray-500">{milestone.councils?.name}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`badge ${getStatusBadgeClass(milestone.status)}`}>
+                                                        {milestone.status}
+                                                    </span>
+                                                    <div className="text-sm text-gray-500 mt-1">
+                                                        Due: {formatDate(milestone.target_date)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {milestone.description && (
+                                                <p className="text-gray-700 text-sm mb-3">{milestone.description}</p>
+                                            )}
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-sm">
+                                                        <strong>Progress:</strong> {milestone.completion_percentage}%
+                                                    </span>
+                                                    <span className={`badge ${getStatusBadgeClass(milestone.validation_status)}`}>
+                                                        {milestone.validation_status}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedItem({...milestone, type: 'milestone'});
+                                                        setShowDetailModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-outline"
+                                                >
+                                                    👁️ View Details
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'documents' && (
+                            <div className="card">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Project Documents</h2>
+                                </div>
+
+                                <div className="table-container">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Document</th>
+                                                <th>Project</th>
+                                                <th>Council</th>
+                                                <th>Type</th>
+                                                <th>Size</th>
+                                                <th>Status</th>
+                                                <th>Uploaded</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {documents.map(doc => (
+                                                <tr key={doc.id}>
+                                                    <td className="font-medium">{doc.document_name}</td>
+                                                    <td>{doc.projects?.title}</td>
+                                                    <td>{doc.councils?.name}</td>
+                                                    <td>
+                                                        <span className="badge badge-blue">{doc.document_type}</span>
+                                                    </td>
+                                                    <td>{(doc.file_size / 1024 / 1024).toFixed(2)} MB</td>
+                                                    <td>
+                                                        <span className={`badge ${getStatusBadgeClass(doc.validation_status)}`}>
+                                                            {doc.validation_status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-sm text-gray-600">{formatDate(doc.uploaded_at)}</td>
+                                                    <td>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => window.open(doc.file_path, '_blank')}
+                                                                className="btn btn-sm btn-outline"
+                                                            >
+                                                                📥 Download
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedItem({...doc, type: 'document'});
+                                                                    setShowDetailModal(true);
+                                                                }}
+                                                                className="btn btn-sm btn-outline"
+                                                            >
+                                                                👁️ View Details
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'audit' && (
+                            <div className="card">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Audit Trail</h2>
+                                    <button
+                                        onClick={() => exportData('audit')}
+                                        className="btn export-button"
+                                    >
+                                        📤 Export Audit CSV
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {auditLogs.map(log => (
+                                        <div key={log.id} className={`audit-log-entry ${log.action}`}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="font-medium">
+                                                        {log.action.replace('_', ' ').toUpperCase()} on {log.table_name}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600">
+                                                        By: {log.system_users?.full_name || 'System'} • 
+                                                        Record ID: {log.record_id}
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm text-gray-500">
+                                                    {formatDate(log.created_at)}
+                                                </div>
+                                            </div>
+                                            
+                                            {(log.old_values || log.new_values) && (
+                                                <details className="mt-2">
+                                                    <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800">
+                                                        View Changes
+                                                    </summary>
+                                                    <div className="mt-2 text-xs bg-gray-100 p-2 rounded">
+                                                        {log.old_values && Object.keys(log.old_values).length > 0 && (
+                                                            <div className="mb-2">
+                                                                <strong>Old Values:</strong>
+                                                                <pre>{JSON.stringify(log.old_values, null, 2)}</pre>
+                                                            </div>
+                                                        )}
+                                                        {log.new_values && Object.keys(log.new_values).length > 0 && (
+                                                            <div>
+                                                                <strong>New Values:</strong>
+                                                                <pre>{JSON.stringify(log.new_values, null, 2)}</pre>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </details>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Detail Modal */}
+                    {showDetailModal && <DetailModal />}
+                </div>
+            );
+
+            // Detail Modal Component
+            function DetailModal() {
+                const getModalTitle = () => {
+                    switch (selectedItem?.type) {
+                        case 'project':
+                            return `Project: ${selectedItem.title}`;
+                        case 'validation':
+                            return `Validation: ${selectedItem.projects?.title}`;
+                        case 'milestone':
+                            return `Milestone: ${selectedItem.milestone_name}`;
+                        case 'document':
+                            return `Document: ${selectedItem.document_name}`;
+                        default:
+                            return 'Item Details';
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">{getModalTitle()}</h3>
+                            
+                            <div className="space-y-4">
+                                {selectedItem?.type === 'project' && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="form-label">Description</label>
+                                            <p className="text-gray-700">{selectedItem.description || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Council</label>
+                                            <p className="text-gray-700">{selectedItem.councils?.name}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Status</label>
+                                            <span className={`badge ${getStatusBadgeClass(selectedItem.status)}`}>
+                                                {selectedItem.status}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Phase</label>
+                                            <span className="badge badge-blue">{selectedItem.phase}</span>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Budget</label>
+                                            <p className="font-semibold">{formatSLL(selectedItem.budget)}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Spent Amount</label>
+                                            <p className="font-semibold">{formatSLL(selectedItem.spent_amount)}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Completion</label>
+                                            <p className="font-semibold">{selectedItem.completion_percentage}%</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Created</label>
+                                            <p className="text-gray-700">{formatDate(selectedItem.created_at)}</p>
+                                        </div>
+                                        {selectedItem.kpis && selectedItem.kpis.length > 0 && (
+                                            <div className="col-span-2">
+                                                <label className="form-label">KPIs</label>
+                                                <div className="space-y-2">
+                                                    {selectedItem.kpis.map((kpi, index) => (
+                                                        <div key={index} className="bg-gray-100 p-2 rounded text-sm">
+                                                            <strong>{kpi.name}:</strong> {kpi.target_value} {kpi.unit}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {selectedItem?.type === 'validation' && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="form-label">Update Type</label>
+                                            <p className="text-gray-700">{selectedItem.update_type}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Status</label>
+                                            <span className={`badge ${getStatusBadgeClass(selectedItem.validation_status)}`}>
+                                                {selectedItem.validation_status}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Requested At</label>
+                                            <p className="text-gray-700">{formatDate(selectedItem.requested_at)}</p>
+                                        </div>
+                                        <div>
+                                            <label className="form-label">Validated At</label>
+                                            <p className="text-gray-700">
+                                                {selectedItem.validated_at ? formatDate(selectedItem.validated_at) : 'N/A'}
+                                            </p>
+                                        </div>
+                                        {selectedItem.update_data && (
+                                            <div className="col-span-2">
+                                                <label className="form-label">Update Data</label>
+                                                <pre className="bg-gray-100 p-3 rounded text-sm overflow-auto">
+                                                    {JSON.stringify(selectedItem.update_data, null, 2)}
+                                                </pre>
+                                            </div>
+                                        )}
+                                        {selectedItem.validation_notes && (
+                                            <div className="col-span-2">
+                                                <label className="form-label">Validation Notes</label>
+                                                <p className="bg-gray-100 p-3 rounded text-sm">{selectedItem.validation_notes}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Similar sections for milestone and document types */}
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    onClick={() => {
+                                        setShowDetailModal(false);
+                                        setSelectedItem(null);
+                                    }}
+                                    className="btn btn-outline"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<AuditorDashboard />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Auditor Dashboard: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

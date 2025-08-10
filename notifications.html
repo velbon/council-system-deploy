@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Notification System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .notification-header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .notification-bell { animation: ring 2s ease-in-out infinite; transform-origin: 50% 0%; }
+        @keyframes ring {
+            0%, 20%, 40%, 60%, 80%, 100% { transform: rotate(0deg); }
+            10% { transform: rotate(-10deg); }
+            30% { transform: rotate(10deg); }
+            50% { transform: rotate(-10deg); }
+            70% { transform: rotate(10deg); }
+        }
+        .notification-item { transition: all 0.3s; border-left: 4px solid transparent; }
+        .notification-item:hover { background: #f8fafc; transform: translateX(4px); }
+        .notification-urgent { border-left-color: #ef4444; background: #fef2f2; }
+        .notification-warning { border-left-color: #f59e0b; background: #fffbeb; }
+        .notification-info { border-left-color: #3b82f6; background: #eff6ff; }
+        .notification-success { border-left-color: #10b981; background: #ecfdf5; }
+        .overdue-badge { background: linear-gradient(45deg, #ef4444, #dc2626); animation: pulse 2s infinite; }
+        .due-soon-badge { background: linear-gradient(45deg, #f59e0b, #d97706); }
+        .completed-badge { background: linear-gradient(45deg, #10b981, #059669); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .workflow-step { position: relative; }
+        .workflow-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            width: 2px;
+            height: 60px;
+            background: #e5e7eb;
+            z-index: 1;
+        }
+        .workflow-step.active::after { background: #3b82f6; }
+        .workflow-step.completed::after { background: #10b981; }
+        .workflow-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 2; position: relative; }
+        .workflow-icon.pending { background: #e5e7eb; color: #6b7280; }
+        .workflow-icon.active { background: #3b82f6; color: white; animation: pulse 2s infinite; }
+        .workflow-icon.completed { background: #10b981; color: white; }
+        .auto-refresh { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔔 Loading Notification System...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // Mock current user - in real implementation, get from auth
+        const CURRENT_USER = {
+            id: 'user-1',
+            full_name: 'John Administrator',
+            role: 'admin', // admin, council_user, supervisor, auditor
+            council_id: 'freetown-council'
+        };
+
+        const NotificationSystem = () => {
+            const [notifications, setNotifications] = useState([]);
+            const [overdueItems, setOverdueItems] = useState([]);
+            const [workflowTasks, setWorkflowTasks] = useState([]);
+            const [statistics, setStatistics] = useState({});
+            const [loading, setLoading] = useState(true);
+            const [autoRefresh, setAutoRefresh] = useState(true);
+            const [lastUpdated, setLastUpdated] = useState(new Date());
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            const [selectedFilter, setSelectedFilter] = useState('all');
+            const [showWorkflow, setShowWorkflow] = useState(false);
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    } else {
+                        console.warn('Supabase not available, using mock data');
+                        loadMockData();
+                    }
+                } catch (error) {
+                    console.warn('Supabase initialization failed, using mock data');
+                    loadMockData();
+                }
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchNotificationData();
+                } else {
+                    loadMockData();
+                }
+            }, [supabaseClient]);
+
+            // Auto-refresh setup
+            useEffect(() => {
+                if (autoRefresh) {
+                    const interval = setInterval(() => {
+                        if (supabaseClient) {
+                            fetchNotificationData();
+                        } else {
+                            loadMockData();
+                        }
+                        setLastUpdated(new Date());
+                    }, 30000); // Refresh every 30 seconds
+
+                    return () => clearInterval(interval);
+                }
+            }, [autoRefresh, supabaseClient]);
+
+            const fetchNotificationData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchNotifications(),
+                        fetchOverdueItems(),
+                        fetchWorkflowTasks(),
+                        fetchStatistics()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching notification data:', error);
+                    loadMockData();
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchNotifications = async () => {
+                // Simulated notification fetching - in real implementation, this would query the database
+                const mockNotifications = [
+                    {
+                        id: 1,
+                        type: 'urgent',
+                        title: 'Project Update Overdue',
+                        message: 'Freetown Road Infrastructure project update is 5 days overdue',
+                        timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                        read: false,
+                        project_id: 'proj-1',
+                        user_id: CURRENT_USER.id
+                    },
+                    {
+                        id: 2,
+                        type: 'warning',
+                        title: 'Milestone Due Soon',
+                        message: 'Water System milestone "Phase 2 Completion" due in 2 days',
+                        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                        read: false,
+                        project_id: 'proj-2',
+                        user_id: CURRENT_USER.id
+                    },
+                    {
+                        id: 3,
+                        type: 'info',
+                        title: 'Validation Required',
+                        message: 'New project status update requires your validation',
+                        timestamp: new Date(Date.now() - 30 * 60 * 1000),
+                        read: false,
+                        project_id: 'proj-3',
+                        user_id: CURRENT_USER.id
+                    },
+                    {
+                        id: 4,
+                        type: 'success',
+                        title: 'Document Approved',
+                        message: 'Budget allocation document has been validated and approved',
+                        timestamp: new Date(Date.now() - 15 * 60 * 1000),
+                        read: true,
+                        project_id: 'proj-4',
+                        user_id: CURRENT_USER.id
+                    }
+                ];
+
+                setNotifications(mockNotifications);
+            };
+
+            const fetchOverdueItems = async () => {
+                const mockOverdueItems = [
+                    {
+                        id: 'over-1',
+                        type: 'project_update',
+                        project_title: 'Freetown Road Infrastructure',
+                        council: 'Freetown City Council',
+                        due_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                        days_overdue: 5,
+                        priority: 'high',
+                        assigned_to: 'Council Manager',
+                        status: 'overdue'
+                    },
+                    {
+                        id: 'over-2',
+                        type: 'milestone',
+                        project_title: 'Bo Water Supply System',
+                        council: 'Bo City Council',
+                        due_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                        days_overdue: 2,
+                        priority: 'medium',
+                        assigned_to: 'Project Engineer',
+                        status: 'overdue'
+                    },
+                    {
+                        id: 'due-1',
+                        type: 'validation',
+                        project_title: 'Makeni School Construction',
+                        council: 'Makeni City Council',
+                        due_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+                        days_overdue: 0,
+                        priority: 'high',
+                        assigned_to: 'Supervisor',
+                        status: 'due_soon'
+                    }
+                ];
+
+                setOverdueItems(mockOverdueItems);
+            };
+
+            const fetchWorkflowTasks = async () => {
+                const mockWorkflowTasks = [
+                    {
+                        id: 'wf-1',
+                        project_title: 'Freetown Waste Management',
+                        current_step: 'validation',
+                        steps: [
+                            { name: 'Project Update', status: 'completed', assigned_to: 'Council User', completed_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+                            { name: 'Document Upload', status: 'completed', assigned_to: 'Council User', completed_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
+                            { name: 'Supervisor Review', status: 'active', assigned_to: 'Supervisor', due_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) },
+                            { name: 'Final Approval', status: 'pending', assigned_to: 'Admin', due_date: null },
+                            { name: 'Implementation', status: 'pending', assigned_to: 'Council User', due_date: null }
+                        ]
+                    },
+                    {
+                        id: 'wf-2',
+                        project_title: 'Kenema Health Center',
+                        current_step: 'document_upload',
+                        steps: [
+                            { name: 'Project Planning', status: 'completed', assigned_to: 'Council User', completed_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
+                            { name: 'Budget Approval', status: 'completed', assigned_to: 'Admin', completed_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+                            { name: 'Document Preparation', status: 'active', assigned_to: 'Council User', due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) },
+                            { name: 'Quality Review', status: 'pending', assigned_to: 'Supervisor', due_date: null },
+                            { name: 'Project Launch', status: 'pending', assigned_to: 'Council User', due_date: null }
+                        ]
+                    }
+                ];
+
+                setWorkflowTasks(mockWorkflowTasks);
+            };
+
+            const fetchStatistics = async () => {
+                const stats = {
+                    total_notifications: notifications.length,
+                    unread_notifications: notifications.filter(n => !n.read).length,
+                    overdue_items: overdueItems.filter(item => item.status === 'overdue').length,
+                    due_soon_items: overdueItems.filter(item => item.status === 'due_soon').length,
+                    active_workflows: workflowTasks.length,
+                    pending_validations: 3
+                };
+
+                setStatistics(stats);
+            };
+
+            const loadMockData = async () => {
+                setLoading(true);
+                await fetchNotifications();
+                await fetchOverdueItems();
+                await fetchWorkflowTasks();
+                await fetchStatistics();
+                setLoading(false);
+            };
+
+            const markAsRead = (notificationId) => {
+                setNotifications(prev => 
+                    prev.map(notification => 
+                        notification.id === notificationId 
+                            ? { ...notification, read: true }
+                            : notification
+                    )
+                );
+            };
+
+            const markAllAsRead = () => {
+                setNotifications(prev => 
+                    prev.map(notification => ({ ...notification, read: true }))
+                );
+            };
+
+            const getNotificationIcon = (type) => {
+                switch (type) {
+                    case 'urgent': return '🚨';
+                    case 'warning': return '⚠️';
+                    case 'info': return 'ℹ️';
+                    case 'success': return '✅';
+                    default: return '📢';
+                }
+            };
+
+            const getOverdueIcon = (type) => {
+                switch (type) {
+                    case 'project_update': return '📊';
+                    case 'milestone': return '🎯';
+                    case 'validation': return '✅';
+                    case 'document': return '📄';
+                    default: return '📋';
+                }
+            };
+
+            const formatRelativeTime = (date) => {
+                const now = new Date();
+                const diff = now - date;
+                const minutes = Math.floor(diff / (1000 * 60));
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+                if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+                if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+                if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+                return 'Just now';
+            };
+
+            const formatDueDate = (date, isOverdue = false) => {
+                const now = new Date();
+                const diff = date - now;
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+                if (isOverdue) return `${Math.abs(days)} days overdue`;
+                if (days === 0) return 'Due today';
+                if (days === 1) return 'Due tomorrow';
+                if (days > 1) return `Due in ${days} days`;
+                return 'Overdue';
+            };
+
+            const filteredNotifications = notifications.filter(notification => {
+                if (selectedFilter === 'all') return true;
+                if (selectedFilter === 'unread') return !notification.read;
+                return notification.type === selectedFilter;
+            });
+
+            const generateReminders = async () => {
+                // In real implementation, this would trigger server-side reminder generation
+                const newReminders = overdueItems.filter(item => item.status === 'overdue').map(item => ({
+                    id: `reminder-${item.id}`,
+                    type: 'urgent',
+                    title: 'Automated Reminder',
+                    message: `${item.type === 'project_update' ? 'Project update' : item.type} for "${item.project_title}" is ${item.days_overdue} days overdue`,
+                    timestamp: new Date(),
+                    read: false,
+                    project_id: item.id,
+                    user_id: CURRENT_USER.id,
+                    automated: true
+                }));
+
+                setNotifications(prev => [...newReminders, ...prev]);
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading notification system...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="notification-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="notification-bell text-4xl">🔔</div>
+                                    <div>
+                                        <h1 className="text-3xl font-bold">Notification Center</h1>
+                                        <p className="text-orange-100 mt-2">
+                                            Real-time alerts, reminders, and workflow management
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-orange-100 text-sm">
+                                        Last updated: {lastUpdated.toLocaleTimeString()}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-orange-100 text-sm">Auto-refresh:</span>
+                                        <button
+                                            onClick={() => setAutoRefresh(!autoRefresh)}
+                                            className={`w-10 h-6 rounded-full transition-colors ${
+                                                autoRefresh ? 'bg-white' : 'bg-orange-600'
+                                            } relative`}
+                                        >
+                                            <div className={`w-4 h-4 rounded-full bg-orange-500 absolute top-1 transition-transform ${
+                                                autoRefresh ? 'translate-x-5' : 'translate-x-1'
+                                            }`} />
+                                        </button>
+                                        {autoRefresh && <span className="auto-refresh">🔄</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Statistics Dashboard */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-blue-600">{statistics.total_notifications || 0}</div>
+                                <div className="text-sm text-gray-600">Total Notifications</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-red-600">{statistics.unread_notifications || 0}</div>
+                                <div className="text-sm text-gray-600">Unread</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-red-500">{statistics.overdue_items || 0}</div>
+                                <div className="text-sm text-gray-600">Overdue Items</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-orange-500">{statistics.due_soon_items || 0}</div>
+                                <div className="text-sm text-gray-600">Due Soon</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-purple-600">{statistics.active_workflows || 0}</div>
+                                <div className="text-sm text-gray-600">Active Workflows</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow">
+                                <div className="text-2xl font-bold text-green-600">{statistics.pending_validations || 0}</div>
+                                <div className="text-sm text-gray-600">Pending Validations</div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap gap-4 mb-6">
+                            <button
+                                onClick={generateReminders}
+                                className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                            >
+                                🔔 Generate Overdue Reminders
+                            </button>
+                            <button
+                                onClick={markAllAsRead}
+                                className="flex items-center gap-2 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            >
+                                ✅ Mark All Read
+                            </button>
+                            <button
+                                onClick={() => setShowWorkflow(!showWorkflow)}
+                                className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+                            >
+                                {showWorkflow ? '📋' : '🔄'} {showWorkflow ? 'Hide' : 'Show'} Workflows
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (supabaseClient) fetchNotificationData();
+                                    else loadMockData();
+                                }}
+                                className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                                🔄 Refresh Now
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Notifications Panel */}
+                            <div className="bg-white rounded-lg shadow">
+                                <div className="p-6 border-b">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-xl font-semibold">Recent Notifications</h2>
+                                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-sm">
+                                            {statistics.unread_notifications || 0} unread
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Filter Buttons */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {['all', 'unread', 'urgent', 'warning', 'info', 'success'].map(filter => (
+                                            <button
+                                                key={filter}
+                                                onClick={() => setSelectedFilter(filter)}
+                                                className={`px-3 py-1 rounded-full text-sm capitalize transition-colors ${
+                                                    selectedFilter === filter
+                                                        ? 'bg-orange-500 text-white'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                {filter}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="max-h-96 overflow-y-auto">
+                                    {filteredNotifications.map(notification => (
+                                        <div
+                                            key={notification.id}
+                                            className={`notification-item p-4 cursor-pointer notification-${notification.type} ${
+                                                !notification.read ? 'font-medium' : 'opacity-75'
+                                            }`}
+                                            onClick={() => markAsRead(notification.id)}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl flex-shrink-0">
+                                                    {getNotificationIcon(notification.type)}
+                                                </span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <h3 className="font-medium text-gray-900 truncate">
+                                                            {notification.title}
+                                                        </h3>
+                                                        {!notification.read && (
+                                                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-gray-600 text-sm mb-2">{notification.message}</p>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs text-gray-500">
+                                                            {formatRelativeTime(notification.timestamp)}
+                                                        </span>
+                                                        {notification.automated && (
+                                                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                                                Automated
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Overdue Items Panel */}
+                            <div className="bg-white rounded-lg shadow">
+                                <div className="p-6 border-b">
+                                    <h2 className="text-xl font-semibold mb-4">Overdue & Due Soon</h2>
+                                </div>
+
+                                <div className="max-h-96 overflow-y-auto">
+                                    {overdueItems.map(item => (
+                                        <div key={item.id} className="p-4 border-b last:border-b-0">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl flex-shrink-0">
+                                                    {getOverdueIcon(item.type)}
+                                                </span>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <h3 className="font-medium text-gray-900">{item.project_title}</h3>
+                                                        <span className={`text-xs px-2 py-1 rounded-full text-white ${
+                                                            item.status === 'overdue' ? 'overdue-badge' : 'due-soon-badge'
+                                                        }`}>
+                                                            {item.status === 'overdue' ? 'OVERDUE' : 'DUE SOON'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mb-1">{item.council}</p>
+                                                    <p className="text-sm text-gray-600 mb-2">
+                                                        {item.type.replace('_', ' ').toUpperCase()} - Assigned to: {item.assigned_to}
+                                                    </p>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className={`text-sm font-medium ${
+                                                            item.status === 'overdue' ? 'text-red-600' : 'text-orange-600'
+                                                        }`}>
+                                                            {formatDueDate(item.due_date, item.status === 'overdue')}
+                                                        </span>
+                                                        <span className={`text-xs px-2 py-1 rounded ${
+                                                            item.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                                            item.priority === 'medium' ? 'bg-orange-100 text-orange-800' :
+                                                            'bg-blue-100 text-blue-800'
+                                                        }`}>
+                                                            {item.priority} priority
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Workflow Visualization */}
+                        {showWorkflow && (
+                            <div className="mt-8 bg-white rounded-lg shadow">
+                                <div className="p-6 border-b">
+                                    <h2 className="text-xl font-semibold">Active Workflows</h2>
+                                    <p className="text-gray-600 mt-1">Track project workflow progress and assignments</p>
+                                </div>
+
+                                <div className="p-6">
+                                    {workflowTasks.map(workflow => (
+                                        <div key={workflow.id} className="mb-8 last:mb-0">
+                                            <h3 className="font-semibold text-lg mb-4">{workflow.project_title}</h3>
+                                            
+                                            <div className="space-y-4">
+                                                {workflow.steps.map((step, index) => (
+                                                    <div key={index} className={`workflow-step flex items-start gap-4 ${step.status}`}>
+                                                        <div className={`workflow-icon ${step.status}`}>
+                                                            {step.status === 'completed' ? '✓' : 
+                                                             step.status === 'active' ? '⏳' : '⭕'}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <h4 className="font-medium">{step.name}</h4>
+                                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                                    step.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                    step.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                                                                    'bg-gray-100 text-gray-800'
+                                                                }`}>
+                                                                    {step.status}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600">Assigned to: {step.assigned_to}</p>
+                                                            {step.completed_at && (
+                                                                <p className="text-xs text-gray-500">
+                                                                    Completed: {step.completed_at.toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                            {step.due_date && step.status !== 'completed' && (
+                                                                <p className="text-xs text-orange-600">
+                                                                    Due: {step.due_date.toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<NotificationSystem />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Notification System: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

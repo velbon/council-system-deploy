@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.125);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Supabase configuration
+        const SUPABASE_URL = 'https://your-project.supabase.co';
+        const SUPABASE_ANON_KEY = 'your-anon-key';
+        
+        let supabase = null; // Force demo mode for now
+        
+        // Check if we have real Supabase credentials
+        const hasRealCredentials = SUPABASE_URL !== 'https://your-project.supabase.co' && 
+                                  SUPABASE_ANON_KEY !== 'your-anon-key';
+        
+        if (hasRealCredentials) {
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('✅ Supabase client initialized');
+            } catch (error) {
+                console.log('❌ Supabase initialization failed, using demo mode:', error);
+                supabase = null;
+            }
+        } else {
+            console.log('🔄 Using demo mode - Supabase credentials are placeholders');
+        }
+
+        // Demo users for testing
+        const DEMO_USERS = [
+            { id: 1, email: 'admin@ppms.sl', password: 'admin123', name: 'System Administrator', role: 'admin' },
+            { id: 2, email: 'council@ppms.sl', password: 'council123', name: 'Council User', role: 'council_user' },
+            { id: 3, email: 'supervisor@ppms.sl', password: 'super123', name: 'Project Supervisor', role: 'supervisor' },
+            { id: 4, email: 'auditor@ppms.sl', password: 'audit123', name: 'System Auditor', role: 'auditor' }
+        ];
+
+        const { useState, useEffect } = React;
+
+        function LoginPage() {
+            const [formData, setFormData] = useState({
+                email: '',
+                password: ''
+            });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [showDemo, setShowDemo] = useState(false);
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+                if (error) setError('');
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+
+                try {
+                    if (supabase) {
+                        // Real authentication with Supabase
+                        const { data, error } = await supabase.auth.signInWithPassword({
+                            email: formData.email,
+                            password: formData.password
+                        });
+
+                        if (error) {
+                            setError(error.message);
+                            setLoading(false);
+                            return;
+                        }
+
+                        // Get user role from database
+                        const { data: userData, error: userError } = await supabase
+                            .from('system_users')
+                            .select(`
+                                *,
+                                user_roles (
+                                    role_name,
+                                    role_description
+                                )
+                            `)
+                            .eq('email', formData.email)
+                            .single();
+
+                        if (userError) {
+                            setError('User role not found. Contact administrator.');
+                            setLoading(false);
+                            return;
+                        }
+
+                        // Store user session
+                        localStorage.setItem('ppms_user', JSON.stringify({
+                            id: userData.id,
+                            email: userData.email,
+                            name: userData.full_name,
+                            role: userData.user_roles.role_name,
+                            council_id: userData.council_id,
+                            login_time: new Date().toISOString()
+                        }));
+
+                        redirectToRoleDashboard(userData.user_roles.role_name);
+                    } else {
+                        // Demo authentication
+                        const user = DEMO_USERS.find(u => 
+                            u.email === formData.email && u.password === formData.password
+                        );
+
+                        if (!user) {
+                            setError('Invalid email or password');
+                            setLoading(false);
+                            return;
+                        }
+
+                        // Store demo user session
+                        localStorage.setItem('ppms_user', JSON.stringify({
+                            id: user.id,
+                            email: user.email,
+                            name: user.name,
+                            role: user.role,
+                            council_id: user.role === 'council_user' ? 1 : null,
+                            login_time: new Date().toISOString()
+                        }));
+
+                        redirectToRoleDashboard(user.role);
+                    }
+                } catch (err) {
+                    setError('Login failed. Please try again.');
+                    console.error('Login error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const redirectToRoleDashboard = (role) => {
+                // All users now go to the unified dashboard
+                // The dashboard will show role-appropriate modules
+                window.location.href = 'dashboard.html';
+            };
+
+            const fillDemoCredentials = (userType) => {
+                const user = DEMO_USERS.find(u => u.role === userType);
+                if (user) {
+                    setFormData({
+                        email: user.email,
+                        password: user.password
+                    });
+                }
+            };
+
+            const handleForgotPassword = async () => {
+                if (!formData.email) {
+                    setError('Please enter your email address first');
+                    return;
+                }
+
+                if (supabase) {
+                    try {
+                        const { error } = await supabase.auth.resetPasswordForEmail(formData.email);
+                        if (error) {
+                            setError(error.message);
+                        } else {
+                            alert('Password reset email sent! Check your inbox.');
+                        }
+                    } catch (err) {
+                        setError('Failed to send reset email');
+                    }
+                } else {
+                    alert('Demo mode: Password reset not available');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                    <div className="max-w-md w-full space-y-8">
+                        <div className="glass-effect rounded-2xl p-8 shadow-2xl">
+                            {/* Header */}
+                            <div className="text-center">
+                                <div className="mx-auto h-12 w-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-4">
+                                    <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                </div>
+                                <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
+                                    PPMS Login
+                                </h2>
+                                <p className="text-gray-600">
+                                    Public Project Management System
+                                </p>
+                                <p className="text-sm text-indigo-600 font-medium">
+                                    Sierra Leone Local Councils
+                                </p>
+                            </div>
+
+                            {/* Login Form */}
+                            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Email Address
+                                    </label>
+                                    <input
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        autoComplete="email"
+                                        required
+                                        className="w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                                        placeholder="Enter your email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Password
+                                    </label>
+                                    <input
+                                        id="password"
+                                        name="password"
+                                        type="password"
+                                        autoComplete="current-password"
+                                        required
+                                        className="w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                                        placeholder="Enter your password"
+                                        value={formData.password}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                {error && (
+                                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                                        {error}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={handleForgotPassword}
+                                            className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
+                                        >
+                                            Forgot your password?
+                                        </button>
+                                    </div>
+                                    <div className="text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDemo(!showDemo)}
+                                            className="font-medium text-gray-600 hover:text-gray-500 transition-colors"
+                                        >
+                                            Demo Accounts
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {loading ? (
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                                        </svg>
+                                    )}
+                                    {loading ? 'Signing in...' : 'Sign in'}
+                                </button>
+                            </form>
+
+                            {/* Demo Accounts */}
+                            {showDemo && (
+                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                    <h3 className="text-sm font-medium text-gray-700 mb-3">Demo Accounts</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => fillDemoCredentials('admin')}
+                                            className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 transition-colors"
+                                        >
+                                            Admin
+                                        </button>
+                                        <button
+                                            onClick={() => fillDemoCredentials('council_user')}
+                                            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                        >
+                                            Council User
+                                        </button>
+                                        <button
+                                            onClick={() => fillDemoCredentials('supervisor')}
+                                            className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                                        >
+                                            Supervisor
+                                        </button>
+                                        <button
+                                            onClick={() => fillDemoCredentials('auditor')}
+                                            className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 transition-colors"
+                                        >
+                                            Auditor
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2 text-center">
+                                        Click to auto-fill credentials
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* System Info */}
+                            <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+                                <p className="text-xs text-gray-500">
+                                    {supabase ? '🟢 Live Database Connected' : '🔄 Demo Mode Active'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="text-center text-sm text-white">
+                            <p>© 2024 Public Project Management System</p>
+                            <p>Sierra Leone Local Councils</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<LoginPage />, document.getElementById('root'));
+    </script>
+</body>
+</html>

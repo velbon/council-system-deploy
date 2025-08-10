@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Supervisor Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .supervisor-header { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 4xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1); }
+        .form-textarea { resize: vertical; min-height: 80px; }
+        .form-select { background: white; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #7c3aed; color: white; } .btn-primary:hover { background: #6d28d9; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; } .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; color: white; } .btn-warning:hover { background: #d97706; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-purple { background: #e0e7ff; color: #5b21b6; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .validation-item { border-left: 4px solid #7c3aed; margin-bottom: 1rem; transition: all 0.2s; }
+        .validation-item:hover { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .validation-item.pending { border-left-color: #f59e0b; }
+        .validation-item.approved { border-left-color: #10b981; }
+        .validation-item.rejected { border-left-color: #ef4444; }
+        .priority-high { border-left-color: #ef4444 !important; }
+        .priority-medium { border-left-color: #f59e0b !important; }
+        .priority-low { border-left-color: #3b82f6 !important; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .stat-card { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .audit-trail { font-size: 0.875rem; color: #6b7280; background: #f9fafb; padding: 0.75rem; border-radius: 0.375rem; margin-top: 1rem; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading Supervisor Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Mock current user - in real implementation, get from auth
+        const CURRENT_USER = {
+            id: 'supervisor-1',
+            full_name: 'Sarah Validation Judge',
+            role: 'supervisor',
+            jurisdiction: 'all' // Can validate all councils or specific ones
+        };
+
+        const SupervisorDashboard = () => {
+            // State management
+            const [validationRequests, setValidationRequests] = useState([]);
+            const [milestones, setMilestones] = useState([]);
+            const [documents, setDocuments] = useState([]);
+            const [projects, setProjects] = useState([]);
+            const [statistics, setStatistics] = useState({});
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [activeTab, setActiveTab] = useState("pending");
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            
+            // Modal states
+            const [showValidationModal, setShowValidationModal] = useState(false);
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [validationAction, setValidationAction] = useState('approve');
+            const [validationNotes, setValidationNotes] = useState('');
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    } else {
+                        setMessage("❌ Supabase library not loaded");
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Supabase initialization error:', error);
+                    setMessage("❌ Error initializing Supabase client");
+                    setLoading(false);
+                }
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchData();
+                }
+            }, [supabaseClient]);
+
+            const fetchData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchValidationRequests(),
+                        fetchMilestones(),
+                        fetchDocuments(),
+                        fetchProjects(),
+                        fetchStatistics()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    setMessage("❌ Error loading data");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchValidationRequests = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_validations')
+                    .select(`
+                        *,
+                        projects(title, council_id),
+                        councils!inner(name),
+                        system_users!requested_by(full_name)
+                    `)
+                    .order('requested_at', { ascending: false });
+                if (error) throw error;
+                setValidationRequests(data || []);
+            };
+
+            const fetchMilestones = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_milestones')
+                    .select(`
+                        *,
+                        projects(title, council_id),
+                        councils!inner(name)
+                    `)
+                    .eq('validation_status', 'pending')
+                    .order('target_date', { ascending: true });
+                if (error) throw error;
+                setMilestones(data || []);
+            };
+
+            const fetchDocuments = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_documents')
+                    .select(`
+                        *,
+                        projects(title, council_id),
+                        councils!inner(name)
+                    `)
+                    .eq('validation_status', 'pending')
+                    .order('uploaded_at', { ascending: false });
+                if (error) throw error;
+                setDocuments(data || []);
+            };
+
+            const fetchProjects = async () => {
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .select(`
+                        *,
+                        councils(name)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setProjects(data || []);
+            };
+
+            const fetchStatistics = async () => {
+                // Get validation statistics
+                const { data: validationStats } = await supabaseClient
+                    .from('project_validations')
+                    .select('validation_status');
+
+                const { data: milestoneStats } = await supabaseClient
+                    .from('project_milestones')
+                    .select('validation_status');
+
+                const { data: documentStats } = await supabaseClient
+                    .from('project_documents')
+                    .select('validation_status');
+
+                const stats = {
+                    pending_validations: (validationStats || []).filter(v => v.validation_status === 'pending').length,
+                    approved_validations: (validationStats || []).filter(v => v.validation_status === 'approved').length,
+                    rejected_validations: (validationStats || []).filter(v => v.validation_status === 'rejected').length,
+                    pending_milestones: (milestoneStats || []).filter(m => m.validation_status === 'pending').length,
+                    pending_documents: (documentStats || []).filter(d => d.validation_status === 'pending').length,
+                    total_projects: projects.length
+                };
+
+                setStatistics(stats);
+            };
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            // Validate project update
+            const validateUpdate = async (itemId, itemType, action, notes) => {
+                try {
+                    let updateData = {
+                        validation_status: action,
+                        validation_notes: notes,
+                        validated_by: CURRENT_USER.id,
+                        validated_at: new Date().toISOString()
+                    };
+
+                    let tableName;
+                    switch (itemType) {
+                        case 'validation':
+                            tableName = 'project_validations';
+                            break;
+                        case 'milestone':
+                            tableName = 'project_milestones';
+                            break;
+                        case 'document':
+                            tableName = 'project_documents';
+                            break;
+                        default:
+                            throw new Error('Invalid item type');
+                    }
+
+                    const { error } = await supabaseClient
+                        .from(tableName)
+                        .update(updateData)
+                        .eq('id', itemId);
+
+                    if (error) throw error;
+
+                    // If approving a project validation, also update the project
+                    if (itemType === 'validation' && action === 'approved') {
+                        const validationItem = validationRequests.find(v => v.id === itemId);
+                        if (validationItem && validationItem.update_data) {
+                            const projectUpdate = {};
+                            
+                            // Apply the validated changes to the project
+                            if (validationItem.update_data.new_status) {
+                                projectUpdate.status = validationItem.update_data.new_status;
+                            }
+                            if (validationItem.update_data.completion_percentage !== undefined) {
+                                projectUpdate.completion_percentage = validationItem.update_data.completion_percentage;
+                            }
+                            
+                            if (Object.keys(projectUpdate).length > 0) {
+                                await supabaseClient
+                                    .from('projects')
+                                    .update(projectUpdate)
+                                    .eq('id', validationItem.project_id);
+                            }
+                        }
+                    }
+
+                    // Log audit event
+                    await supabaseClient
+                        .from('audit_logs')
+                        .insert([{
+                            table_name: tableName,
+                            record_id: itemId,
+                            action: `validation_${action}`,
+                            old_values: {},
+                            new_values: updateData,
+                            user_id: CURRENT_USER.id
+                        }]);
+
+                    showMessage(`Item ${action} successfully!`);
+                    setShowValidationModal(false);
+                    setSelectedItem(null);
+                    setValidationNotes('');
+                    fetchData();
+
+                } catch (error) {
+                    showMessage(`Error ${action === 'approved' ? 'approving' : 'rejecting'} item: ${error.message}`, true);
+                }
+            };
+
+            // Utility functions
+            const getStatusBadgeClass = (status) => {
+                switch (status) {
+                    case 'approved': return 'badge-green';
+                    case 'pending': return 'badge-yellow';
+                    case 'rejected': return 'badge-red';
+                    case 'completed': return 'badge-green';
+                    case 'in_progress': return 'badge-blue';
+                    default: return 'badge-blue';
+                }
+            };
+
+            const getPriorityClass = (date, status) => {
+                if (status !== 'pending') return '';
+                const now = new Date();
+                const targetDate = new Date(date);
+                const diffDays = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) return 'priority-high'; // Overdue
+                if (diffDays <= 3) return 'priority-medium'; // Due soon
+                return 'priority-low'; // Normal
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                return `SLL ${Number(amount).toLocaleString()}`;
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Supervisor Dashboard...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="supervisor-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <h1 className="text-3xl font-bold">Supervisor Dashboard</h1>
+                            <p className="text-purple-100 mt-2">
+                                Welcome, {CURRENT_USER.full_name} • Project Validation & Oversight
+                            </p>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Statistics */}
+                        <div className="stats-grid mb-6">
+                            <div className="stat-card">
+                                <div className="stat-number text-yellow-600">{statistics.pending_validations || 0}</div>
+                                <div className="text-gray-600">Pending Validations</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-green-600">{statistics.approved_validations || 0}</div>
+                                <div className="text-gray-600">Approved Today</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-blue-600">{statistics.pending_milestones || 0}</div>
+                                <div className="text-gray-600">Milestones to Review</div>
+                            </div>
+                            <div className="stat-card">
+                                <div className="stat-number text-purple-600">{statistics.pending_documents || 0}</div>
+                                <div className="text-gray-600">Documents to Validate</div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="bg-white rounded-lg shadow mb-6">
+                            <div className="border-b border-gray-200">
+                                <nav className="-mb-px flex space-x-8 px-6">
+                                    {[
+                                        { id: 'pending', label: 'Pending Validations', icon: '⏳', count: statistics.pending_validations },
+                                        { id: 'milestones', label: 'Milestone Reviews', icon: '🎯', count: statistics.pending_milestones },
+                                        { id: 'documents', label: 'Document Validation', icon: '📄', count: statistics.pending_documents },
+                                        { id: 'completed', label: 'Completed', icon: '✅' }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                                activeTab === tab.id
+                                                    ? 'border-purple-500 text-purple-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tab.icon} {tab.label}
+                                            {tab.count > 0 && (
+                                                <span className="ml-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                                                    {tab.count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'pending' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Pending Validations</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {validationRequests
+                                        .filter(req => req.validation_status === 'pending')
+                                        .map(request => (
+                                            <div key={request.id} className={`card validation-item pending ${getPriorityClass(request.requested_at, request.validation_status)}`}>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-semibold text-lg">{request.projects?.title}</h3>
+                                                        <p className="text-gray-600">{request.councils?.name}</p>
+                                                        <p className="text-sm text-purple-600 font-medium">{request.update_type}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`badge ${getStatusBadgeClass(request.validation_status)}`}>
+                                                            {request.validation_status}
+                                                        </span>
+                                                        <div className="text-sm text-gray-500 mt-1">
+                                                            {formatDate(request.requested_at)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {request.update_data && (
+                                                    <div className="bg-gray-100 p-3 rounded text-sm mb-3">
+                                                        <strong>Proposed Changes:</strong>
+                                                        <pre className="mt-2 text-xs">{JSON.stringify(request.update_data, null, 2)}</pre>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex justify-between items-center">
+                                                    <div className="text-sm text-gray-600">
+                                                        Requested by: {request.system_users?.full_name}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedItem({...request, type: 'validation'});
+                                                                setValidationAction('approved');
+                                                                setShowValidationModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-success"
+                                                        >
+                                                            ✅ Approve
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedItem({...request, type: 'validation'});
+                                                                setValidationAction('rejected');
+                                                                setShowValidationModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-danger"
+                                                        >
+                                                            ❌ Reject
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'milestones' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Milestone Reviews</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {milestones.map(milestone => (
+                                        <div key={milestone.id} className={`card validation-item pending ${getPriorityClass(milestone.target_date, milestone.validation_status)}`}>
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-lg">{milestone.milestone_name}</h3>
+                                                    <p className="text-gray-600">{milestone.projects?.title}</p>
+                                                    <p className="text-sm text-gray-500">{milestone.councils?.name}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`badge ${getStatusBadgeClass(milestone.validation_status)}`}>
+                                                        {milestone.validation_status}
+                                                    </span>
+                                                    <div className="text-sm text-gray-500 mt-1">
+                                                        Due: {formatDate(milestone.target_date)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {milestone.description && (
+                                                <p className="text-gray-700 text-sm mb-3">{milestone.description}</p>
+                                            )}
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <div className="text-sm">
+                                                    <span className="font-medium">Progress:</span> {milestone.completion_percentage}%
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedItem({...milestone, type: 'milestone'});
+                                                            setValidationAction('approved');
+                                                            setShowValidationModal(true);
+                                                        }}
+                                                        className="btn btn-sm btn-success"
+                                                    >
+                                                        ✅ Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedItem({...milestone, type: 'milestone'});
+                                                            setValidationAction('rejected');
+                                                            setShowValidationModal(true);
+                                                        }}
+                                                        className="btn btn-sm btn-danger"
+                                                    >
+                                                        ❌ Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'documents' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Document Validation</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {documents.map(document => (
+                                        <div key={document.id} className="card validation-item pending">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-lg">{document.document_name}</h3>
+                                                    <p className="text-gray-600">{document.projects?.title}</p>
+                                                    <p className="text-sm text-gray-500">{document.councils?.name}</p>
+                                                    <p className="text-sm text-blue-600 font-medium">{document.document_type}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`badge ${getStatusBadgeClass(document.validation_status)}`}>
+                                                        {document.validation_status}
+                                                    </span>
+                                                    <div className="text-sm text-gray-500 mt-1">
+                                                        {formatDate(document.uploaded_at)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="text-sm text-gray-600 mb-3">
+                                                Size: {(document.file_size / 1024 / 1024).toFixed(2)} MB • 
+                                                Type: {document.mime_type}
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <button
+                                                    onClick={() => {
+                                                        // In real implementation, download from Supabase Storage
+                                                        window.open(document.file_path, '_blank');
+                                                    }}
+                                                    className="btn btn-sm btn-outline"
+                                                >
+                                                    📥 Download
+                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedItem({...document, type: 'document'});
+                                                            setValidationAction('approved');
+                                                            setShowValidationModal(true);
+                                                        }}
+                                                        className="btn btn-sm btn-success"
+                                                    >
+                                                        ✅ Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedItem({...document, type: 'document'});
+                                                            setValidationAction('rejected');
+                                                            setShowValidationModal(true);
+                                                        }}
+                                                        className="btn btn-sm btn-danger"
+                                                    >
+                                                        ❌ Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'completed' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Completed Validations</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {validationRequests
+                                        .filter(req => req.validation_status !== 'pending')
+                                        .map(request => (
+                                            <div key={request.id} className={`card validation-item ${request.validation_status}`}>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-semibold text-lg">{request.projects?.title}</h3>
+                                                        <p className="text-gray-600">{request.councils?.name}</p>
+                                                        <p className="text-sm text-purple-600 font-medium">{request.update_type}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`badge ${getStatusBadgeClass(request.validation_status)}`}>
+                                                            {request.validation_status}
+                                                        </span>
+                                                        <div className="text-sm text-gray-500 mt-1">
+                                                            {formatDate(request.validated_at || request.requested_at)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {request.validation_notes && (
+                                                    <div className="bg-gray-100 p-3 rounded text-sm">
+                                                        <strong>Validation Notes:</strong> {request.validation_notes}
+                                                    </div>
+                                                )}
+
+                                                {request.validated_at && (
+                                                    <div className="audit-trail">
+                                                        Validated on {formatDate(request.validated_at)} by {CURRENT_USER.full_name}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Validation Modal */}
+                    {showValidationModal && <ValidationModal />}
+                </div>
+            );
+
+            // Validation Modal Component
+            function ValidationModal() {
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    validateUpdate(selectedItem.id, selectedItem.type, validationAction, validationNotes);
+                };
+
+                const getItemTitle = () => {
+                    switch (selectedItem?.type) {
+                        case 'validation':
+                            return `${selectedItem.projects?.title} - ${selectedItem.update_type}`;
+                        case 'milestone':
+                            return selectedItem.milestone_name;
+                        case 'document':
+                            return selectedItem.document_name;
+                        default:
+                            return 'Item';
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content max-w-2xl">
+                            <h3 className="text-lg font-semibold mb-4">
+                                {validationAction === 'approved' ? '✅ Approve' : '❌ Reject'}: {getItemTitle()}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        {validationAction === 'approved' ? 'Approval' : 'Rejection'} Notes
+                                        {validationAction === 'rejected' && ' (Required)'}
+                                    </label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        rows={4}
+                                        value={validationNotes}
+                                        onChange={(e) => setValidationNotes(e.target.value)}
+                                        placeholder={
+                                            validationAction === 'approved' 
+                                                ? 'Optional notes about the approval...'
+                                                : 'Please provide reasons for rejection...'
+                                        }
+                                        required={validationAction === 'rejected'}
+                                    />
+                                </div>
+
+                                {selectedItem?.type === 'validation' && selectedItem.update_data && (
+                                    <div className="form-group">
+                                        <label className="form-label">Changes to be Applied</label>
+                                        <div className="bg-gray-100 p-3 rounded text-sm">
+                                            <pre>{JSON.stringify(selectedItem.update_data, null, 2)}</pre>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowValidationModal(false);
+                                            setSelectedItem(null);
+                                            setValidationNotes('');
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        className={`btn ${validationAction === 'approved' ? 'btn-success' : 'btn-danger'}`}
+                                    >
+                                        {validationAction === 'approved' ? '✅ Approve' : '❌ Reject'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<SupervisorDashboard />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Supervisor Dashboard: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

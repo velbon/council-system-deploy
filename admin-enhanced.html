@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Admin - User Management</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .admin-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 4xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .form-textarea { resize: vertical; min-height: 80px; }
+        .form-select { background: white; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #3b82f6; color: white; } .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #6b7280; color: white; } .btn-secondary:hover { background: #4b5563; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; } .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; color: white; } .btn-warning:hover { background: #d97706; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .grid { display: grid; gap: 1rem; }
+        .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-purple { background: #e9d5ff; color: #7c3aed; }
+        .badge-gray { background: #f3f4f6; color: #374151; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .table th { background: #f9fafb; font-weight: 600; }
+        .validation-item { border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; }
+        .validation-item.pending { border-left: 4px solid #f59e0b; }
+        .validation-item.approved { border-left: 4px solid #10b981; }
+        .validation-item.rejected { border-left: 4px solid #ef4444; }
+        @media (max-width: 768px) {
+            .grid-cols-2, .grid-cols-3, .grid-cols-4 { grid-template-columns: 1fr; }
+            .modal-content { margin: 1rem; max-width: calc(100vw - 2rem); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading PPMS Enhanced Admin Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const EnhancedAdminDashboard = () => {
+            // State management
+            const [councils, setCouncils] = useState([]);
+            const [projects, setProjects] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [userRoles, setUserRoles] = useState([]);
+            const [validations, setValidations] = useState([]);
+            const [milestones, setMilestones] = useState([]);
+            const [documents, setDocuments] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [activeTab, setActiveTab] = useState("users");
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            const [exchangeRate, setExchangeRate] = useState(null);
+            const [exchangeRateLoading, setExchangeRateLoading] = useState(true);
+            const [currentUser, setCurrentUser] = useState(null);
+            
+            // Modal states
+            const [showUserModal, setShowUserModal] = useState(false);
+            const [showValidationModal, setShowValidationModal] = useState(false);
+            const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+            const [editingUser, setEditingUser] = useState(null);
+            const [selectedValidation, setSelectedValidation] = useState(null);
+            const [selectedProjectId, setSelectedProjectId] = useState(null);
+
+            // Demo data for offline mode
+            const DEMO_ROLES = [
+                { id: 1, role_name: 'admin', role_description: 'System Administrator', description: 'Full system access' },
+                { id: 2, role_name: 'council_user', role_description: 'Council Project Manager', description: 'Council-specific project management' },
+                { id: 3, role_name: 'supervisor', role_description: 'Project Supervisor/Judge', description: 'Validation and approval workflows' },
+                { id: 4, role_name: 'auditor', role_description: 'System Auditor', description: 'Read-only access with reporting' }
+            ];
+
+            const DEMO_COUNCILS = [
+                { id: 1, name: 'Freetown City Council', district: 'Western Area Urban' },
+                { id: 2, name: 'Bo City Council', district: 'Bo District' },
+                { id: 3, name: 'Kenema City Council', district: 'Kenema District' },
+                { id: 4, name: 'Makeni City Council', district: 'Bombali District' }
+            ];
+
+            const DEMO_USERS = [
+                { 
+                    id: 1, 
+                    email: 'admin@ppms.sl', 
+                    full_name: 'System Administrator', 
+                    role_id: 1, 
+                    user_roles: { role_name: 'admin', role_description: 'System Administrator' },
+                    councils: null,
+                    is_active: true, 
+                    created_at: '2024-01-15T10:00:00Z',
+                    last_login: '2024-01-20T14:30:00Z'
+                },
+                { 
+                    id: 2, 
+                    email: 'council@ppms.sl', 
+                    full_name: 'Council User', 
+                    role_id: 2, 
+                    user_roles: { role_name: 'council_user', role_description: 'Council Project Manager' },
+                    councils: { name: 'Freetown City Council' },
+                    is_active: true, 
+                    created_at: '2024-01-16T09:00:00Z',
+                    last_login: '2024-01-20T16:45:00Z'
+                }
+            ];
+
+            // Check authentication first
+            useEffect(() => {
+                const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                if (!user.id || user.role !== 'admin') {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                setCurrentUser(user);
+            }, []);
+
+            // Initialize Supabase or use demo data
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    // Check if we have placeholder credentials (demo mode)
+                    const hasRealCredentials = supabaseUrl !== 'https://lschntjazpnyljuauyuy.supabase.co';
+                    
+                    if (hasRealCredentials && typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                        console.log('✅ Using Supabase database');
+                    } else {
+                        console.log('🔄 Using demo mode - loading demo data');
+                        loadDemoData();
+                    }
+                } catch (error) {
+                    console.error('Supabase initialization error:', error);
+                    console.log('🔄 Falling back to demo mode');
+                    loadDemoData();
+                }
+            }, []);
+
+            // Fetch exchange rate
+            useEffect(() => {
+                fetchExchangeRate();
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchAllData();
+                }
+            }, [supabaseClient]);
+
+            const fetchExchangeRate = async () => {
+                try {
+                    setExchangeRateLoading(true);
+                    const response = await fetch('https://api.exchangerate-api.com/v4/latest/SLL');
+                    const data = await response.json();
+                    setExchangeRate(data.rates.USD);
+                } catch (error) {
+                    console.warn('Could not fetch exchange rate, using fallback:', error);
+                    setExchangeRate(0.000051);
+                } finally {
+                    setExchangeRateLoading(false);
+                }
+            };
+
+            const fetchAllData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchCouncils(),
+                        fetchProjects(),
+                        fetchUsers(),
+                        fetchUserRoles(),
+                        fetchValidations(),
+                        fetchMilestones(),
+                        fetchDocuments()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    setMessage("❌ Error loading data");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchCouncils = async () => {
+                const { data, error } = await supabaseClient
+                    .from('councils')
+                    .select('*')
+                    .order('name');
+                if (error) throw error;
+                setCouncils(data || []);
+            };
+
+            const fetchProjects = async () => {
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .select(`
+                        *,
+                        councils(name),
+                        kpis(*)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setProjects(data || []);
+            };
+
+            const fetchUsers = async () => {
+                const { data, error } = await supabaseClient
+                    .from('system_users')
+                    .select(`
+                        *,
+                        user_roles(role_name, description),
+                        councils(name)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setUsers(data || []);
+            };
+
+            const fetchUserRoles = async () => {
+                const { data, error } = await supabaseClient
+                    .from('user_roles')
+                    .select('*')
+                    .order('role_name');
+                if (error) throw error;
+                setUserRoles(data || []);
+            };
+
+            const fetchValidations = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_validations')
+                    .select(`
+                        *,
+                        projects(title),
+                        system_users!project_validations_requested_by_fkey(full_name),
+                        validator:system_users!project_validations_validator_id_fkey(full_name)
+                    `)
+                    .order('requested_at', { ascending: false });
+                if (error) throw error;
+                setValidations(data || []);
+            };
+
+            const fetchMilestones = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_milestones')
+                    .select(`
+                        *,
+                        projects(title),
+                        created_by_user:system_users!project_milestones_created_by_fkey(full_name),
+                        validated_by_user:system_users!project_milestones_validated_by_fkey(full_name)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setMilestones(data || []);
+            };
+
+            const fetchDocuments = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_documents')
+                    .select(`
+                        *,
+                        projects(title),
+                        uploaded_by_user:system_users!project_documents_uploaded_by_fkey(full_name),
+                        validated_by_user:system_users!project_documents_validated_by_fkey(full_name)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setDocuments(data || []);
+            };
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            // User operations
+            const createUser = async (userData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('system_users')
+                        .insert([userData]);
+                    if (error) throw error;
+                    
+                    showMessage("User created successfully!");
+                    setShowUserModal(false);
+                    fetchUsers();
+                } catch (error) {
+                    showMessage(`Error creating user: ${error.message}`, true);
+                }
+            };
+
+            const updateUser = async (userData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('system_users')
+                        .update(userData)
+                        .eq('id', editingUser.id);
+                    if (error) throw error;
+                    
+                    showMessage("User updated successfully!");
+                    setShowUserModal(false);
+                    setEditingUser(null);
+                    fetchUsers();
+                } catch (error) {
+                    showMessage(`Error updating user: ${error.message}`, true);
+                }
+            };
+
+            const toggleUserStatus = async (userId, currentStatus) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('system_users')
+                        .update({ is_active: !currentStatus })
+                        .eq('id', userId);
+                    if (error) throw error;
+                    
+                    showMessage(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully!`);
+                    fetchUsers();
+                } catch (error) {
+                    showMessage(`Error updating user status: ${error.message}`, true);
+                }
+            };
+
+            // Validation operations
+            const handleValidation = async (validationId, status, notes = '') => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('project_validations')
+                        .update({
+                            validation_status: status,
+                            validation_notes: notes,
+                            validated_at: new Date().toISOString()
+                        })
+                        .eq('id', validationId);
+                    if (error) throw error;
+                    
+                    showMessage(`Validation ${status} successfully!`);
+                    setShowValidationModal(false);
+                    setSelectedValidation(null);
+                    fetchValidations();
+                } catch (error) {
+                    showMessage(`Error processing validation: ${error.message}`, true);
+                }
+            };
+
+            // Utility functions
+            const getRoleBadgeClass = (roleName) => {
+                switch (roleName) {
+                    case 'admin': return 'badge-red';
+                    case 'supervisor': return 'badge-purple';
+                    case 'council_user': return 'badge-blue';
+                    case 'auditor': return 'badge-gray';
+                    default: return 'badge-gray';
+                }
+            };
+
+            const getValidationBadgeClass = (status) => {
+                switch (status) {
+                    case 'pending': return 'badge-yellow';
+                    case 'approved': return 'badge-green';
+                    case 'rejected': return 'badge-red';
+                    default: return 'badge-gray';
+                }
+            };
+
+            const formatDate = (dateString) => {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                return `SLL ${Number(amount).toLocaleString()}`;
+            };
+
+            const formatUSD = (sllAmount) => {
+                if (!sllAmount || !exchangeRate) return '$0.00';
+                const usdAmount = sllAmount * exchangeRate;
+                return `$${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            };
+
+            // Load demo data when Supabase is not available
+            const loadDemoData = () => {
+                console.log('📊 Loading demo data...');
+                setUserRoles(DEMO_ROLES);
+                setCouncils(DEMO_COUNCILS);
+                setUsers(DEMO_USERS);
+                setProjects([]);
+                setValidations([]);
+                setMilestones([]);
+                setDocuments([]);
+                setLoading(false);
+                showMessage('Demo mode active - using sample data');
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Enhanced Admin Dashboard...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="admin-header text-white p-6">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold">PPMS Enhanced Admin Dashboard</h1>
+                                <p className="text-blue-100 mt-2">User Management & Role-Based Access Control</p>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <a 
+                                    href="admin-users.html" 
+                                    className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                                >
+                                    👥 User Management
+                                </a>
+                                <div className="text-sm">
+                                    Welcome, {currentUser?.name || 'Admin'}
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        localStorage.removeItem('ppms_user');
+                                        window.location.href = 'login.html';
+                                    }}
+                                    className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                                >
+                                    🚪 Logout
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Tabs */}
+                        <div className="bg-white rounded-lg shadow mb-6">
+                            <div className="border-b border-gray-200">
+                                <nav className="-mb-px flex space-x-8 px-6">
+                                    {[
+                                        { id: 'users', label: 'User Management', icon: '👥' },
+                                        { id: 'validations', label: 'Validations', icon: '✅' },
+                                        { id: 'milestones', label: 'Milestones', icon: '🎯' },
+                                        { id: 'documents', label: 'Documents', icon: '📄' },
+                                        { id: 'projects', label: 'Projects', icon: '📊' }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                                activeTab === tab.id
+                                                    ? 'border-blue-500 text-blue-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tab.icon} {tab.label}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'users' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+                                    <button
+                                        onClick={() => {
+                                            setEditingUser(null);
+                                            setShowUserModal(true);
+                                        }}
+                                        className="btn btn-primary"
+                                    >
+                                        ➕ Create User
+                                    </button>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow overflow-hidden">
+                                    <table className="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>Role</th>
+                                                <th>Council</th>
+                                                <th>Status</th>
+                                                <th>Last Login</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(user => (
+                                                <tr key={user.id}>
+                                                    <td className="font-medium">{user.full_name}</td>
+                                                    <td>{user.email}</td>
+                                                    <td>
+                                                        <span className={`badge ${getRoleBadgeClass(user.user_roles?.role_name)}`}>
+                                                            {user.user_roles?.role_name}
+                                                        </span>
+                                                    </td>
+                                                    <td>{user.councils?.name || 'N/A'}</td>
+                                                    <td>
+                                                        <span className={`badge ${user.is_active ? 'badge-green' : 'badge-red'}`}>
+                                                            {user.is_active ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        {user.last_login ? formatDate(user.last_login) : 'Never'}
+                                                    </td>
+                                                    <td>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingUser(user);
+                                                                    setShowUserModal(true);
+                                                                }}
+                                                                className="btn btn-sm btn-outline"
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => toggleUserStatus(user.id, user.is_active)}
+                                                                className={`btn btn-sm ${user.is_active ? 'btn-warning' : 'btn-success'}`}
+                                                            >
+                                                                {user.is_active ? '⏸️ Deactivate' : '▶️ Activate'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'validations' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Validation Requests</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {validations.map(validation => (
+                                        <div key={validation.id} className={`validation-item ${validation.validation_status}`}>
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">{validation.projects?.title}</h3>
+                                                    <p className="text-gray-600">
+                                                        {validation.update_type} • Requested by {validation.system_users?.full_name}
+                                                    </p>
+                                                </div>
+                                                <span className={`badge ${getValidationBadgeClass(validation.validation_status)}`}>
+                                                    {validation.validation_status}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="mb-3">
+                                                <p className="text-sm text-gray-700">
+                                                    <strong>Update Data:</strong> {JSON.stringify(validation.update_data, null, 2)}
+                                                </p>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">
+                                                    Requested: {formatDate(validation.requested_at)}
+                                                </span>
+                                                
+                                                {validation.validation_status === 'pending' && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleValidation(validation.id, 'approved')}
+                                                            className="btn btn-sm btn-success"
+                                                        >
+                                                            ✅ Approve
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedValidation(validation);
+                                                                setShowValidationModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-danger"
+                                                        >
+                                                            ❌ Reject
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {validation.validation_notes && (
+                                                <div className="mt-3 p-3 bg-gray-100 rounded">
+                                                    <p className="text-sm"><strong>Notes:</strong> {validation.validation_notes}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'milestones' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Project Milestones</h2>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow overflow-hidden">
+                                    <table className="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Project</th>
+                                                <th>Milestone</th>
+                                                <th>Target Date</th>
+                                                <th>Status</th>
+                                                <th>Completion</th>
+                                                <th>Validation</th>
+                                                <th>Created By</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {milestones.map(milestone => (
+                                                <tr key={milestone.id}>
+                                                    <td className="font-medium">{milestone.projects?.title}</td>
+                                                    <td>{milestone.milestone_name}</td>
+                                                    <td>{milestone.target_date}</td>
+                                                    <td>
+                                                        <span className={`badge ${getValidationBadgeClass(milestone.status)}`}>
+                                                            {milestone.status}
+                                                        </span>
+                                                    </td>
+                                                    <td>{milestone.completion_percentage}%</td>
+                                                    <td>
+                                                        <span className={`badge ${getValidationBadgeClass(milestone.validation_status)}`}>
+                                                            {milestone.validation_status}
+                                                        </span>
+                                                    </td>
+                                                    <td>{milestone.created_by_user?.full_name || 'N/A'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'documents' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Project Documents</h2>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow overflow-hidden">
+                                    <table className="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Document</th>
+                                                <th>Project</th>
+                                                <th>Type</th>
+                                                <th>Size</th>
+                                                <th>Uploaded By</th>
+                                                <th>Validation</th>
+                                                <th>Upload Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {documents.map(doc => (
+                                                <tr key={doc.id}>
+                                                    <td className="font-medium">{doc.document_name}</td>
+                                                    <td>{doc.projects?.title}</td>
+                                                    <td>
+                                                        <span className="badge badge-blue">
+                                                            {doc.document_type || 'General'}
+                                                        </span>
+                                                    </td>
+                                                    <td>{doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'}</td>
+                                                    <td>{doc.uploaded_by_user?.full_name || 'N/A'}</td>
+                                                    <td>
+                                                        <span className={`badge ${getValidationBadgeClass(doc.validation_status)}`}>
+                                                            {doc.validation_status}
+                                                        </span>
+                                                    </td>
+                                                    <td>{formatDate(doc.created_at)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'projects' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Projects Overview</h2>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {projects.map(project => (
+                                        <div key={project.id} className="card">
+                                            <h3 className="text-lg font-semibold mb-2">{project.title}</h3>
+                                            <p className="text-gray-600 text-sm mb-3">{project.councils?.name}</p>
+                                            
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                <span className={`badge ${project.status === 'Active' ? 'badge-blue' : 'badge-gray'}`}>
+                                                    {project.status}
+                                                </span>
+                                                <span className={`badge ${project.priority === 'high' ? 'badge-red' : 'badge-green'}`}>
+                                                    {project.priority}
+                                                </span>
+                                            </div>
+
+                                            <div className="text-sm space-y-2">
+                                                <div>
+                                                    <span className="font-medium">Budget:</span>
+                                                    <div>{formatSLL(project.budget)}</div>
+                                                    <div className="text-xs text-gray-500">≈ {formatUSD(project.budget)}</div>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">Completion:</span> {project.completion_percentage || 0}%
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">KPIs:</span> {project.kpis?.length || 0} defined
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modals */}
+                    {showUserModal && <UserModal />}
+                    {showValidationModal && <ValidationModal />}
+                </div>
+            );
+
+            // Modal Components
+            function UserModal() {
+                const [formData, setFormData] = useState(
+                    editingUser || {
+                        email: '',
+                        full_name: '',
+                        role_id: '',
+                        council_id: '',
+                        phone: '',
+                        is_active: true
+                    }
+                );
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (editingUser) {
+                        updateUser(formData);
+                    } else {
+                        createUser(formData);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                {editingUser ? 'Edit User' : 'Create New User'}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">Full Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.full_name}
+                                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Email *</label>
+                                    <input
+                                        type="email"
+                                        className="form-input"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Role *</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.role_id}
+                                        onChange={(e) => setFormData({...formData, role_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Role</option>
+                                        {userRoles.map(role => (
+                                            <option key={role.id} value={role.id}>
+                                                {role.role_name} - {role.description}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Council (for Council Users)</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.council_id}
+                                        onChange={(e) => setFormData({...formData, council_id: e.target.value})}
+                                    >
+                                        <option value="">No Council (National User)</option>
+                                        {councils.map(council => (
+                                            <option key={council.id} value={council.id}>
+                                                {council.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Phone</label>
+                                    <input
+                                        type="tel"
+                                        className="form-input"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.is_active}
+                                            onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                                            className="mr-2"
+                                        />
+                                        Active User
+                                    </label>
+                                </div>
+
+                                <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowUserModal(false);
+                                            setEditingUser(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        {editingUser ? 'Update' : 'Create'} User
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            function ValidationModal() {
+                const [notes, setNotes] = useState('');
+
+                const handleReject = () => {
+                    handleValidation(selectedValidation.id, 'rejected', notes);
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">Reject Validation Request</h3>
+                            
+                            <div className="mb-4">
+                                <p><strong>Project:</strong> {selectedValidation?.projects?.title}</p>
+                                <p><strong>Update Type:</strong> {selectedValidation?.update_type}</p>
+                                <p><strong>Requested By:</strong> {selectedValidation?.system_users?.full_name}</p>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">Rejection Notes *</label>
+                                <textarea
+                                    className="form-input form-textarea"
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Please provide a reason for rejection..."
+                                    required
+                                    rows={4}
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    onClick={() => {
+                                        setShowValidationModal(false);
+                                        setSelectedValidation(null);
+                                        setNotes('');
+                                    }}
+                                    className="btn btn-outline"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleReject}
+                                    className="btn btn-danger"
+                                    disabled={!notes.trim()}
+                                >
+                                    Reject Request
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<EnhancedAdminDashboard />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load Enhanced Admin: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

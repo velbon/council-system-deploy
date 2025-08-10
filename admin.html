@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Admin Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .admin-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background: white; border-radius: 0.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 4xl; padding: 1.5rem; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; }
+        .form-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .form-textarea { resize: vertical; min-height: 80px; }
+        .form-select { background: white; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: #3b82f6; color: white; } .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #6b7280; color: white; } .btn-secondary:hover { background: #4b5563; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .btn-success { background: #10b981; color: white; } .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; } .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .grid { display: grid; gap: 1rem; }
+        .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-purple { background: #e9d5ff; color: #7c3aed; }
+        .alert-success { background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #10b981; margin: 1rem 0; }
+        .alert-error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #ef4444; margin: 1rem 0; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .table th { background: #f9fafb; font-weight: 600; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; }
+        .progress-bar { width: 100%; background: #e5e7eb; border-radius: 9999px; height: 0.5rem; overflow: hidden; }
+        .progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
+        @media (max-width: 768px) {
+            .grid-cols-2, .grid-cols-3, .grid-cols-4 { grid-template-columns: 1fr; }
+            .modal-content { margin: 1rem; max-width: calc(100vw - 2rem); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="text-align: center; padding: 3rem; color: #6b7280;">
+            🔄 Loading PPMS Admin Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AdminDashboard = () => {
+            // State management
+            const [councils, setCouncils] = useState([]);
+            const [projects, setProjects] = useState([]);
+            const [kpiTemplates, setKpiTemplates] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState("");
+            const [activeTab, setActiveTab] = useState("councils");
+            const [supabaseClient, setSupabaseClient] = useState(null);
+            const [exchangeRate, setExchangeRate] = useState(null);
+            const [exchangeRateLoading, setExchangeRateLoading] = useState(true);
+            
+            // Modal states
+            const [showCouncilModal, setShowCouncilModal] = useState(false);
+            const [showProjectModal, setShowProjectModal] = useState(false);
+            const [showKpiModal, setShowKpiModal] = useState(false);
+            const [editingCouncil, setEditingCouncil] = useState(null);
+            const [editingProject, setEditingProject] = useState(null);
+            const [selectedCouncilId, setSelectedCouncilId] = useState(null);
+            const [selectedProjectId, setSelectedProjectId] = useState(null);
+
+            // Initialize Supabase
+            useEffect(() => {
+                try {
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    if (typeof supabase !== 'undefined') {
+                        const client = supabase.createClient(supabaseUrl, supabaseKey);
+                        setSupabaseClient(client);
+                    } else {
+                        setMessage("❌ Supabase library not loaded");
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Supabase initialization error:', error);
+                    setMessage("❌ Error initializing Supabase client");
+                    setLoading(false);
+                }
+            }, []);
+
+            // Fetch exchange rate on load
+            useEffect(() => {
+                fetchExchangeRate();
+            }, []);
+
+            // Fetch data
+            useEffect(() => {
+                if (supabaseClient) {
+                    fetchAllData();
+                }
+            }, [supabaseClient]);
+
+            // Fetch current SLL to USD exchange rate
+            const fetchExchangeRate = async () => {
+                try {
+                    setExchangeRateLoading(true);
+                    // Using a free exchange rate API
+                    const response = await fetch('https://api.exchangerate-api.com/v4/latest/SLL');
+                    const data = await response.json();
+                    setExchangeRate(data.rates.USD);
+                } catch (error) {
+                    console.warn('Could not fetch exchange rate, using fallback:', error);
+                    // Fallback exchange rate (approximate SLL to USD)
+                    setExchangeRate(0.000051); // 1 SLL ≈ 0.000051 USD (as of 2024)
+                } finally {
+                    setExchangeRateLoading(false);
+                }
+            };
+
+            const fetchAllData = async () => {
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchCouncils(),
+                        fetchProjects(),
+                        fetchKpiTemplates()
+                    ]);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    setMessage("❌ Error loading data");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchCouncils = async () => {
+                const { data, error } = await supabaseClient
+                    .from('councils')
+                    .select('*')
+                    .order('name');
+                if (error) throw error;
+                setCouncils(data || []);
+            };
+
+            const fetchProjects = async () => {
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .select(`
+                        *,
+                        councils(name),
+                        kpis(*)
+                    `)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setProjects(data || []);
+            };
+
+            const fetchKpiTemplates = async () => {
+                const { data, error } = await supabaseClient
+                    .from('project_kpi_templates')
+                    .select('*')
+                    .order('category', 'kpi_name');
+                if (error) throw error;
+                setKpiTemplates(data || []);
+            };
+
+            const showMessage = (msg, isError = false) => {
+                setMessage(isError ? `❌ ${msg}` : `✅ ${msg}`);
+                setTimeout(() => setMessage(""), 3000);
+            };
+
+            // Council operations
+            const createCouncil = async (councilData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('councils')
+                        .insert([councilData]);
+                    if (error) throw error;
+                    
+                    showMessage("Council created successfully!");
+                    setShowCouncilModal(false);
+                    fetchCouncils();
+                } catch (error) {
+                    showMessage(`Error creating council: ${error.message}`, true);
+                }
+            };
+
+            const updateCouncil = async (councilData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('councils')
+                        .update(councilData)
+                        .eq('id', editingCouncil.id);
+                    if (error) throw error;
+                    
+                    showMessage("Council updated successfully!");
+                    setShowCouncilModal(false);
+                    setEditingCouncil(null);
+                    fetchCouncils();
+                } catch (error) {
+                    showMessage(`Error updating council: ${error.message}`, true);
+                }
+            };
+
+            // Project operations
+            const createProject = async (projectData) => {
+                try {
+                    const { data: newProject, error } = await supabaseClient
+                        .from('projects')
+                        .insert([projectData])
+                        .select()
+                        .single();
+                    if (error) throw error;
+
+                    // Create default KPIs based on templates
+                    const defaultKpis = kpiTemplates
+                        .filter(template => template.template_name === projectData.phase)
+                        .map(template => ({
+                            project_id: newProject.id,
+                            kpi_name: template.kpi_name,
+                            kpi_description: template.kpi_description,
+                            target_value: template.default_target,
+                            unit: template.unit
+                        }));
+
+                    if (defaultKpis.length > 0) {
+                        await supabaseClient.from('kpis').insert(defaultKpis);
+                    }
+                    
+                    showMessage("Project created successfully with default KPIs!");
+                    setShowProjectModal(false);
+                    fetchProjects();
+                } catch (error) {
+                    showMessage(`Error creating project: ${error.message}`, true);
+                }
+            };
+
+            const updateProject = async (projectData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('projects')
+                        .update(projectData)
+                        .eq('id', editingProject.id);
+                    if (error) throw error;
+                    
+                    showMessage("Project updated successfully!");
+                    setShowProjectModal(false);
+                    setEditingProject(null);
+                    fetchProjects();
+                } catch (error) {
+                    showMessage(`Error updating project: ${error.message}`, true);
+                }
+            };
+
+            // KPI operations
+            const updateKPI = async (kpiId, kpiData) => {
+                try {
+                    const { error } = await supabaseClient
+                        .from('kpis')
+                        .update(kpiData)
+                        .eq('id', kpiId);
+                    if (error) throw error;
+                    
+                    showMessage("KPI updated successfully!");
+                    fetchProjects();
+                } catch (error) {
+                    showMessage(`Error updating KPI: ${error.message}`, true);
+                }
+            };
+
+            // Currency formatting functions
+            const formatSLL = (amount) => {
+                if (!amount) return 'SLL 0';
+                return `SLL ${Number(amount).toLocaleString()}`;
+            };
+
+            const formatUSD = (sllAmount) => {
+                if (!sllAmount || !exchangeRate) return '$0.00';
+                const usdAmount = sllAmount * exchangeRate;
+                return `$${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            };
+
+            const formatCurrency = (sllAmount) => {
+                return {
+                    sll: formatSLL(sllAmount),
+                    usd: formatUSD(sllAmount)
+                };
+            };
+
+            const CurrencyDisplay = ({ amount, className = '' }) => {
+                const currency = formatCurrency(amount);
+                return (
+                    <div className={`text-sm ${className}`}>
+                        <div className="font-medium text-gray-900">{currency.sll}</div>
+                        <div className="text-xs text-gray-500">
+                            {exchangeRateLoading ? '≈ Loading...' : `≈ ${currency.usd}`}
+                        </div>
+                    </div>
+                );
+            };
+
+            const getBadgeClass = (value, type) => {
+                switch (type) {
+                    case 'priority':
+                        return value === 'critical' ? 'badge-red' : 
+                               value === 'high' ? 'badge-yellow' : 
+                               value === 'medium' ? 'badge-blue' : 'badge-green';
+                    case 'status':
+                        return value === 'Completed' ? 'badge-green' :
+                               value === 'Active' ? 'badge-blue' :
+                               value === 'Delayed' ? 'badge-red' : 'badge-yellow';
+                    case 'risk':
+                        return value === 'high' ? 'badge-red' :
+                               value === 'medium' ? 'badge-yellow' : 'badge-green';
+                    default:
+                        return 'badge-blue';
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div style={{textAlign: 'center', padding: '3rem', color: '#6b7280'}}>
+                        🔄 Loading Admin Dashboard...
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="admin-header text-white p-6">
+                        <div className="max-w-7xl mx-auto">
+                            <h1 className="text-3xl font-bold">PPMS Admin Dashboard</h1>
+                            <p className="text-blue-100 mt-2">Project Performance Management System Administration</p>
+                        </div>
+                    </header>
+
+                    {/* Message Display */}
+                    {message && (
+                        <div className="max-w-7xl mx-auto px-6 mt-4">
+                            <div className={message.includes('❌') ? 'alert-error' : 'alert-success'}>
+                                {message}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        {/* Tabs */}
+                        <div className="bg-white rounded-lg shadow mb-6">
+                            <div className="border-b border-gray-200">
+                                <nav className="-mb-px flex space-x-8 px-6">
+                                    {[
+                                        { id: 'councils', label: 'Councils', icon: '🏛️' },
+                                        { id: 'projects', label: 'Projects', icon: '📊' },
+                                        { id: 'analytics', label: 'Analytics', icon: '📈' }
+                                    ].map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                                activeTab === tab.id
+                                                    ? 'border-blue-500 text-blue-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            {tab.icon} {tab.label}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'councils' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Councils Management</h2>
+                                    <button
+                                        onClick={() => {
+                                            setEditingCouncil(null);
+                                            setShowCouncilModal(true);
+                                        }}
+                                        className="btn btn-primary"
+                                    >
+                                        ➕ Create Council
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {councils.map(council => (
+                                        <div key={council.id} className="card">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <h3 className="text-lg font-semibold text-gray-900">{council.name}</h3>
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingCouncil(council);
+                                                        setShowCouncilModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-outline"
+                                                >
+                                                    ✏️ Edit
+                                                </button>
+                                            </div>
+                                            <p className="text-gray-600 text-sm mb-4">{council.location}</p>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-gray-500">
+                                                    {projects.filter(p => p.council_id === council.id).length} projects
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedCouncilId(council.id);
+                                                        setEditingProject(null);
+                                                        setShowProjectModal(true);
+                                                    }}
+                                                    className="btn btn-sm btn-success"
+                                                >
+                                                    ➕ Add Project
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'projects' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900">Projects Management</h2>
+                                </div>
+
+                                <div className="space-y-6">
+                                    {projects.map(project => (
+                                        <div key={project.id} className="card">
+                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                                {/* Project Info */}
+                                                <div className="lg:col-span-2">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <h3 className="text-lg font-semibold text-gray-900">{project.title}</h3>
+                                                            <p className="text-sm text-gray-600">{project.councils?.name}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingProject(project);
+                                                                setSelectedCouncilId(project.council_id);
+                                                                setShowProjectModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-outline"
+                                                        >
+                                                            ✏️ Edit
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    {project.description && (
+                                                        <p className="text-gray-700 mb-3 text-sm">{project.description}</p>
+                                                    )}
+                                                    
+                                                    <div className="flex flex-wrap gap-2 mb-3">
+                                                        <span className={`badge ${getBadgeClass(project.status, 'status')}`}>
+                                                            {project.status}
+                                                        </span>
+                                                        <span className={`badge ${getBadgeClass(project.priority, 'priority')}`}>
+                                                            {project.priority} priority
+                                                        </span>
+                                                        <span className={`badge ${getBadgeClass(project.risk_level, 'risk')}`}>
+                                                            {project.risk_level} risk
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <span className="font-medium block mb-1">Budget:</span>
+                                                            <CurrencyDisplay amount={project.budget} />
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium block mb-1">Spent:</span>
+                                                            <CurrencyDisplay amount={project.spent} />
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Phase:</span> {project.phase}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Manager:</span> {project.project_manager || 'Not assigned'}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Progress Bar */}
+                                                    <div className="mt-3">
+                                                        <div className="flex justify-between text-sm mb-1">
+                                                            <span>Completion</span>
+                                                            <span>{project.completion_percentage || 0}%</span>
+                                                        </div>
+                                                        <div className="progress-bar">
+                                                            <div 
+                                                                className="progress-fill"
+                                                                style={{width: `${project.completion_percentage || 0}%`}}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* KPIs */}
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <h4 className="font-semibold text-gray-900">KPIs</h4>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedProjectId(project.id);
+                                                                setShowKpiModal(true);
+                                                            }}
+                                                            className="btn btn-sm btn-outline"
+                                                        >
+                                                            ➕ Add KPI
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-3">
+                                                        {project.kpis?.map(kpi => (
+                                                            <div key={kpi.id} className="kpi-card">
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <h5 className="font-medium text-sm">{kpi.kpi_name}</h5>
+                                                                    <span className="text-xs text-gray-500">{kpi.unit}</span>
+                                                                </div>
+                                                                <div className="text-xs text-gray-600 mb-2">{kpi.kpi_description}</div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <div className="text-sm">
+                                                                        <span className="font-medium text-blue-600">
+                                                                            {kpi.current_value || 0}
+                                                                        </span>
+                                                                        <span className="text-gray-500"> / {kpi.target_value}</span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const newValue = prompt(
+                                                                                `Update ${kpi.kpi_name} (${kpi.unit}):`,
+                                                                                kpi.current_value || 0
+                                                                            );
+                                                                            if (newValue !== null && !isNaN(newValue)) {
+                                                                                updateKPI(kpi.id, { current_value: parseFloat(newValue) });
+                                                                            }
+                                                                        }}
+                                                                        className="text-xs text-blue-600 hover:text-blue-800"
+                                                                    >
+                                                                        Update
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )) || (
+                                                            <p className="text-sm text-gray-500 text-center py-4">
+                                                                No KPIs defined yet
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'analytics' && (
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 mb-6">Analytics Dashboard</h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                    <div className="card text-center">
+                                        <div className="text-3xl font-bold text-blue-600">{councils.length}</div>
+                                        <div className="text-gray-600">Total Councils</div>
+                                    </div>
+                                    <div className="card text-center">
+                                        <div className="text-3xl font-bold text-green-600">{projects.length}</div>
+                                        <div className="text-gray-600">Total Projects</div>
+                                    </div>
+                                    <div className="card text-center">
+                                        <div className="text-3xl font-bold text-purple-600">
+                                            {projects.filter(p => p.status === 'Active').length}
+                                        </div>
+                                        <div className="text-gray-600">Active Projects</div>
+                                    </div>
+                                    <div className="card text-center">
+                                        <div className="text-3xl font-bold text-red-600">
+                                            {projects.filter(p => p.status === 'Delayed').length}
+                                        </div>
+                                        <div className="text-gray-600">Delayed Projects</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="card">
+                                        <h3 className="text-lg font-semibold mb-4">Projects by Priority</h3>
+                                        <div className="space-y-2">
+                                            {['critical', 'high', 'medium', 'low'].map(priority => {
+                                                const count = projects.filter(p => p.priority === priority).length;
+                                                return (
+                                                    <div key={priority} className="flex justify-between items-center">
+                                                        <span className={`badge ${getBadgeClass(priority, 'priority')}`}>
+                                                            {priority}
+                                                        </span>
+                                                        <span className="font-medium">{count} projects</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="card">
+                                        <h3 className="text-lg font-semibold mb-4">Budget Overview</h3>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span>Total Budget:</span>
+                                                <CurrencyDisplay 
+                                                    amount={projects.reduce((sum, p) => sum + (p.budget || 0), 0)} 
+                                                    className="text-right"
+                                                />
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span>Total Spent:</span>
+                                                <CurrencyDisplay 
+                                                    amount={projects.reduce((sum, p) => sum + (p.spent || 0), 0)} 
+                                                    className="text-right"
+                                                />
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span>Remaining:</span>
+                                                <CurrencyDisplay 
+                                                    amount={projects.reduce((sum, p) => sum + (p.budget || 0), 0) - 
+                                                           projects.reduce((sum, p) => sum + (p.spent || 0), 0)} 
+                                                    className="text-right"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Council Modal */}
+                    {showCouncilModal && <CouncilModal />}
+                    
+                    {/* Project Modal */}
+                    {showProjectModal && <ProjectModal />}
+                    
+                    {/* KPI Modal */}
+                    {showKpiModal && <KpiModal />}
+                </div>
+            );
+
+            // Modal Components
+            function CouncilModal() {
+                const [formData, setFormData] = useState(
+                    editingCouncil || { name: '', location: '' }
+                );
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (editingCouncil) {
+                        updateCouncil(formData);
+                    } else {
+                        createCouncil(formData);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                {editingCouncil ? 'Edit Council' : 'Create New Council'}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label className="form-label">Council Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label className="form-label">Location *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.location}
+                                        onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowCouncilModal(false);
+                                            setEditingCouncil(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        {editingCouncil ? 'Update' : 'Create'} Council
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            function ProjectModal() {
+                const [formData, setFormData] = useState(
+                    editingProject || {
+                        council_id: selectedCouncilId || '',
+                        title: '',
+                        description: '',
+                        phase: 'Planning',
+                        status: 'Planning',
+                        priority: 'medium',
+                        risk_level: 'low',
+                        budget: '',
+                        spent: 0,
+                        completion_percentage: 0,
+                        project_manager: '',
+                        estimated_duration_days: ''
+                    }
+                );
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    const projectData = {
+                        ...formData,
+                        budget: formData.budget ? parseFloat(formData.budget) : null,
+                        spent: parseFloat(formData.spent) || 0,
+                        completion_percentage: parseFloat(formData.completion_percentage) || 0,
+                        estimated_duration_days: formData.estimated_duration_days ? parseInt(formData.estimated_duration_days) : null
+                    };
+
+                    if (editingProject) {
+                        updateProject(projectData);
+                    } else {
+                        createProject(projectData);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">
+                                {editingProject ? 'Edit Project' : 'Create New Project'}
+                            </h3>
+                            
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">Council *</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.council_id}
+                                        onChange={(e) => setFormData({...formData, council_id: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Select Council</option>
+                                        {councils.map(council => (
+                                            <option key={council.id} value={council.id}>
+                                                {council.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Project Title *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group md:col-span-2">
+                                    <label className="form-label">Description</label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                        rows={3}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Phase *</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.phase}
+                                        onChange={(e) => setFormData({...formData, phase: e.target.value})}
+                                        required
+                                    >
+                                        <option value="Planning">Planning</option>
+                                        <option value="Infrastructure">Infrastructure</option>
+                                        <option value="Community">Community</option>
+                                        <option value="Economic">Economic</option>
+                                        <option value="Environmental">Environmental</option>
+                                        <option value="Execution">Execution</option>
+                                        <option value="Monitoring">Monitoring</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Status *</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.status}
+                                        onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                        required
+                                    >
+                                        <option value="Planning">Planning</option>
+                                        <option value="Active">Active</option>
+                                        <option value="On Hold">On Hold</option>
+                                        <option value="Delayed">Delayed</option>
+                                        <option value="Completed">Completed</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Priority *</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.priority}
+                                        onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                                        required
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Risk Level</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.risk_level}
+                                        onChange={(e) => setFormData({...formData, risk_level: e.target.value})}
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Budget (SLL)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="form-input"
+                                        value={formData.budget}
+                                        onChange={(e) => setFormData({...formData, budget: e.target.value})}
+                                        placeholder="Enter amount in SLL"
+                                    />
+                                    {formData.budget && exchangeRate && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            ≈ {formatUSD(parseFloat(formData.budget))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Spent (SLL)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="form-input"
+                                        value={formData.spent}
+                                        onChange={(e) => setFormData({...formData, spent: e.target.value})}
+                                        placeholder="Enter amount in SLL"
+                                    />
+                                    {formData.spent && exchangeRate && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            ≈ {formatUSD(parseFloat(formData.spent))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Completion (%)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="0.1"
+                                        className="form-input"
+                                        value={formData.completion_percentage}
+                                        onChange={(e) => setFormData({...formData, completion_percentage: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Project Manager</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.project_manager}
+                                        onChange={(e) => setFormData({...formData, project_manager: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Estimated Duration (days)</label>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        value={formData.estimated_duration_days}
+                                        onChange={(e) => setFormData({...formData, estimated_duration_days: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowProjectModal(false);
+                                            setEditingProject(null);
+                                            setSelectedCouncilId(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        {editingProject ? 'Update' : 'Create'} Project
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            function KpiModal() {
+                const [formData, setFormData] = useState({
+                    kpi_name: '',
+                    kpi_description: '',
+                    target_value: '',
+                    current_value: 0,
+                    unit: '%'
+                });
+
+                const handleSubmit = async (e) => {
+                    e.preventDefault();
+                    try {
+                        const kpiData = {
+                            project_id: selectedProjectId,
+                            ...formData,
+                            target_value: parseFloat(formData.target_value),
+                            current_value: parseFloat(formData.current_value)
+                        };
+
+                        const { error } = await supabaseClient
+                            .from('kpis')
+                            .insert([kpiData]);
+                        
+                        if (error) throw error;
+                        
+                        showMessage("KPI created successfully!");
+                        setShowKpiModal(false);
+                        setSelectedProjectId(null);
+                        fetchProjects();
+                    } catch (error) {
+                        showMessage(`Error creating KPI: ${error.message}`, true);
+                    }
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3 className="text-lg font-semibold mb-4">Add New KPI</h3>
+                            
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-group">
+                                    <label className="form-label">KPI Name *</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={formData.kpi_name}
+                                        onChange={(e) => setFormData({...formData, kpi_name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Description</label>
+                                    <textarea
+                                        className="form-input form-textarea"
+                                        value={formData.kpi_description}
+                                        onChange={(e) => setFormData({...formData, kpi_description: e.target.value})}
+                                        rows={2}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="form-group">
+                                        <label className="form-label">Target Value *</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="form-input"
+                                            value={formData.target_value}
+                                            onChange={(e) => setFormData({...formData, target_value: e.target.value})}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">Current Value</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="form-input"
+                                            value={formData.current_value}
+                                            onChange={(e) => setFormData({...formData, current_value: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Unit</label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={formData.unit}
+                                        onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                                    >
+                                        <option value="%">Percentage (%)</option>
+                                        <option value="count">Count</option>
+                                        <option value="days">Days</option>
+                                        <option value="$">Dollars ($)</option>
+                                        <option value="score">Score</option>
+                                        <option value="rate">Rate</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowKpiModal(false);
+                                            setSelectedProjectId(null);
+                                        }}
+                                        className="btn btn-outline"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        Create KPI
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        // Render the app
+        try {
+            ReactDOM.render(<AdminDashboard />, document.getElementById('root'));
+        } catch (error) {
+            console.error('Render error:', error);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; margin: 2rem;">
+                    <h2>❌ Application Error</h2>
+                    <p>Failed to load PPMS Admin: ${error.message}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #dc2626; color: white; border: none; border-radius: 0.25rem;">
+                        🔄 Reload Page
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
