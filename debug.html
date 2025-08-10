@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Debug Version</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .loading { text-align: center; padding: 2rem; }
+        .error { background: #fee; color: #c00; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+        .success { background: #efe; color: #060; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+        .card { background: white; padding: 1rem; margin: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn { padding: 0.5rem 1rem; margin: 0.25rem; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-outline { background: white; border: 1px solid #ccc; }
+        .council-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root">
+        <div class="loading">Loading PPMS System...</div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Debug function
+        const debug = (message, data = null) => {
+            console.log('[PPMS Debug]', message, data);
+        };
+
+        const App = () => {
+            const [status, setStatus] = useState('initializing');
+            const [councils, setCouncils] = useState([]);
+            const [error, setError] = useState('');
+            const [message, setMessage] = useState('');
+
+            useEffect(() => {
+                initializeApp();
+            }, []);
+
+            const initializeApp = async () => {
+                try {
+                    debug('Starting app initialization');
+                    setStatus('connecting');
+                    
+                    // Check if Supabase is available
+                    if (typeof supabase === 'undefined') {
+                        throw new Error('Supabase library not loaded');
+                    }
+                    
+                    debug('Creating Supabase client');
+                    const supabaseUrl = 'https://lschntjazpnyljuauyuy.supabase.co';
+                    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzY2hudGphenBueWxqdWF1eXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3ODQzMzAsImV4cCI6MjA3MDM2MDMzMH0.CvnMldHeMxohRrnlrC6V_AvJMYw8HiFv5HRHnFvq05E';
+                    
+                    const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+                    debug('Supabase client created');
+
+                    setStatus('fetching');
+                    debug('Fetching councils data');
+
+                    const { data, error } = await supabaseClient
+                        .from('councils')
+                        .select(`
+                            id, name, location,
+                            projects (
+                                id, title, phase, status, budget, spent
+                            )
+                        `);
+
+                    debug('Data fetch response', { data, error });
+
+                    if (error) {
+                        throw new Error(`Database error: ${error.message}`);
+                    }
+
+                    setCouncils(data || []);
+                    setStatus('ready');
+                    setMessage(`Successfully loaded ${data?.length || 0} councils`);
+                    debug('App initialization complete');
+
+                } catch (err) {
+                    debug('App initialization failed', err);
+                    setError(`Failed to initialize: ${err.message}`);
+                    setStatus('error');
+                }
+            };
+
+            const getStatusDisplay = () => {
+                switch (status) {
+                    case 'initializing':
+                        return <div className="loading">🔄 Initializing PPMS...</div>;
+                    case 'connecting':
+                        return <div className="loading">🔗 Connecting to Supabase...</div>;
+                    case 'fetching':
+                        return <div className="loading">📊 Fetching data...</div>;
+                    case 'error':
+                        return <div className="error">❌ Error: {error}</div>;
+                    case 'ready':
+                        return null;
+                    default:
+                        return <div className="loading">Loading...</div>;
+                }
+            };
+
+            return (
+                <div className="p-6 max-w-7xl mx-auto">
+                    <header className="mb-6">
+                        <h1 className="text-3xl font-bold text-gray-900">PPMS — Live Supabase Data</h1>
+                        <p className="text-gray-600">Debug Version - Status: {status}</p>
+                    </header>
+
+                    {getStatusDisplay()}
+
+                    {message && (
+                        <div className="success">✅ {message}</div>
+                    )}
+
+                    {status === 'ready' && (
+                        <div>
+                            <h2 className="text-xl font-semibold mb-4">
+                                Councils ({councils.length})
+                            </h2>
+                            <div className="council-grid">
+                                {councils.map(council => (
+                                    <div key={council.id} className="card">
+                                        <h3 className="font-bold text-lg">{council.name}</h3>
+                                        <p className="text-gray-600">{council.location}</p>
+                                        <p className="text-sm mt-2">
+                                            {council.projects?.length || 0} projects
+                                        </p>
+                                        <div className="mt-3">
+                                            <button className="btn btn-primary">
+                                                View Details
+                                            </button>
+                                        </div>
+                                        {council.projects?.length > 0 && (
+                                            <div className="mt-3">
+                                                <h4 className="font-semibold">Projects:</h4>
+                                                {council.projects.slice(0, 3).map(project => (
+                                                    <div key={project.id} className="text-sm p-2 bg-gray-50 mt-1 rounded">
+                                                        <div className="font-medium">{project.title}</div>
+                                                        <div className="text-gray-600">Status: {project.status}</div>
+                                                        {project.budget && (
+                                                            <div className="text-gray-600">
+                                                                Budget: ${project.budget.toLocaleString()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {councils.length === 0 && (
+                                <div className="card text-center">
+                                    <p>No councils found in the database.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <footer className="mt-8 text-center text-gray-500 text-sm">
+                        <p>Debug Info: Check browser console for detailed logs</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        // Render with error boundary
+        try {
+            debug('Rendering React app');
+            ReactDOM.render(<App />, document.getElementById('root'));
+        } catch (err) {
+            debug('Render error', err);
+            document.getElementById('root').innerHTML = `
+                <div style="padding: 2rem; background: #fee; color: #c00; border-radius: 4px; margin: 1rem;">
+                    <h2>Render Error</h2>
+                    <p>Failed to render React app: ${err.message}</p>
+                    <p>Check browser console for more details.</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
