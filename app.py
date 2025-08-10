@@ -26,6 +26,6 @@ def health_check():
     return {'status': 'healthy', 'service': 'council-dashboard'}, 200
 
 if __name__ == '__main__':
-    # For development
+    # For development and production
     port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port, debug=False)
