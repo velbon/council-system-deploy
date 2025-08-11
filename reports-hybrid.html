@@ -250,23 +250,250 @@
             }
         });
 
+        // Populate council dropdown
+        function populateCouncilDropdown() {
+            const councils = [
+                { id: 'freetown', name: 'Freetown City Council' },
+                { id: 'bo', name: 'Bo City Council' },
+                { id: 'kenema', name: 'Kenema City Council' },
+                { id: 'makeni', name: 'Makeni City Council' },
+                { id: 'koidu', name: 'Koidu New Sembehun City Council' },
+                { id: 'port-loko', name: 'Port Loko City Council' },
+                { id: 'bonthe', name: 'Bonthe Municipal Council' },
+                { id: 'moyamba', name: 'Moyamba District Council' }
+            ];
+            
+            const dropdown = document.getElementById('council-filter');
+            councils.forEach(council => {
+                const option = document.createElement('option');
+                option.value = council.id;
+                option.textContent = council.name;
+                dropdown.appendChild(option);
+            });
+        }
+
         // Progressive enhancement - try to load advanced features
         function loadEnhancedFeatures() {
             try {
-                // Try to load chart libraries
+                // Check if Chart.js is loaded
                 if (typeof Chart !== 'undefined') {
+                    console.log('✅ Chart.js loaded, initializing charts...');
                     document.getElementById('enhanced-content').style.display = 'block';
-                    console.log('✅ Enhanced features loaded');
+                    initializeCharts();
                 } else {
-                    console.log('📊 Charts not available, using basic version');
+                    console.log('📊 Chart.js not available, trying alternative...');
+                    loadAlternativeCharts();
                 }
             } catch (error) {
-                console.log('⚠️ Enhanced features failed, using basic version');
+                console.log('⚠️ Enhanced features failed, using basic version:', error);
+                loadAlternativeCharts();
             }
         }
 
+        // Initialize actual charts
+        function initializeCharts() {
+            const chartsContainer = document.getElementById('charts-container');
+            chartsContainer.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                    <div>
+                        <h4>📊 Project Status Distribution</h4>
+                        <canvas id="statusChart" width="400" height="200"></canvas>
+                    </div>
+                    <div>
+                        <h4>💰 Budget Utilization by Council</h4>
+                        <canvas id="budgetChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <h4>📈 Monthly Progress Trends</h4>
+                    <canvas id="trendChart" width="800" height="300"></canvas>
+                </div>
+            `;
+
+            // Status Distribution Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Completed', 'Active', 'Planning', 'On Hold', 'Delayed'],
+                    datasets: [{
+                        data: [85, 120, 25, 10, 5],
+                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#6b7280', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            // Budget Chart
+            const budgetCtx = document.getElementById('budgetChart').getContext('2d');
+            new Chart(budgetCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Freetown', 'Bo', 'Kenema', 'Makeni', 'Koidu'],
+                    datasets: [
+                        {
+                            label: 'Allocated (SLL B)',
+                            data: [35, 18, 15, 12, 8],
+                            backgroundColor: '#3b82f6'
+                        },
+                        {
+                            label: 'Spent (SLL B)',
+                            data: [28, 12.6, 10.5, 9, 5.6],
+                            backgroundColor: '#10b981'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            // Trend Chart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [
+                        {
+                            label: 'Completion Rate (%)',
+                            data: [45, 52, 58, 63, 67.8, 70],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Budget Utilization (%)',
+                            data: [42, 48, 55, 61, 70, 72],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        }
+
+        // Alternative charts using simple HTML/CSS
+        function loadAlternativeCharts() {
+            document.getElementById('enhanced-content').style.display = 'block';
+            const chartsContainer = document.getElementById('charts-container');
+            chartsContainer.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                    <div>
+                        <h4>📊 Project Status Distribution</h4>
+                        <div style="background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            ${createProgressBar('Completed', 85, 245, '#10b981')}
+                            ${createProgressBar('Active', 120, 245, '#3b82f6')}
+                            ${createProgressBar('Planning', 25, 245, '#f59e0b')}
+                            ${createProgressBar('On Hold', 10, 245, '#6b7280')}
+                            ${createProgressBar('Delayed', 5, 245, '#ef4444')}
+                        </div>
+                    </div>
+                    <div>
+                        <h4>💰 Budget Utilization</h4>
+                        <div style="background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            ${createBudgetBar('Freetown', 28, 35, '#3b82f6')}
+                            ${createBudgetBar('Bo', 12.6, 18, '#10b981')}
+                            ${createBudgetBar('Kenema', 10.5, 15, '#f59e0b')}
+                            ${createBudgetBar('Makeni', 9, 12, '#8b5cf6')}
+                            ${createBudgetBar('Koidu', 5.6, 8, '#ef4444')}
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h4>📈 Performance Trends</h4>
+                    <div style="background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; margin: 1rem 0;">
+                            ${createTrendBar('Jan', 45, 42)}
+                            ${createTrendBar('Feb', 52, 48)}
+                            ${createTrendBar('Mar', 58, 55)}
+                            ${createTrendBar('Apr', 63, 61)}
+                            ${createTrendBar('May', 67.8, 70)}
+                            ${createTrendBar('Jun', 70, 72)}
+                        </div>
+                        <div style="display: flex; gap: 2rem; margin-top: 1rem; font-size: 0.875rem;">
+                            <div><span style="width: 12px; height: 12px; background: #10b981; display: inline-block; margin-right: 0.5rem;"></span>Completion Rate</div>
+                            <div><span style="width: 12px; height: 12px; background: #3b82f6; display: inline-block; margin-right: 0.5rem;"></span>Budget Utilization</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createProgressBar(label, value, total, color) {
+            const percentage = Math.round((value / total) * 100);
+            return `
+                <div style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.875rem; font-weight: 500;">${label}</span>
+                        <span style="font-size: 0.875rem; color: #6b7280;">${value} (${percentage}%)</span>
+                    </div>
+                    <div style="width: 100%; background: #e5e7eb; border-radius: 9999px; height: 8px;">
+                        <div style="width: ${percentage}%; background: ${color}; height: 100%; border-radius: 9999px; transition: width 0.5s;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createBudgetBar(council, spent, allocated, color) {
+            const percentage = Math.round((spent / allocated) * 100);
+            return `
+                <div style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.875rem; font-weight: 500;">${council}</span>
+                        <span style="font-size: 0.875rem; color: #6b7280;">${spent}B / ${allocated}B (${percentage}%)</span>
+                    </div>
+                    <div style="width: 100%; background: #e5e7eb; border-radius: 9999px; height: 10px;">
+                        <div style="width: ${percentage}%; background: ${color}; height: 100%; border-radius: 9999px; transition: width 0.5s;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createTrendBar(month, completion, budget) {
+            return `
+                <div style="text-align: center;">
+                    <div style="font-size: 0.75rem; font-weight: 500; margin-bottom: 0.5rem;">${month}</div>
+                    <div style="height: 100px; display: flex; flex-direction: column; justify-content: end; gap: 2px;">
+                        <div style="width: 100%; background: #10b981; height: ${completion}%; min-height: 4px; border-radius: 2px; transition: height 0.5s;" title="Completion: ${completion}%"></div>
+                        <div style="width: 100%; background: #3b82f6; height: ${budget}%; min-height: 4px; border-radius: 2px; transition: height 0.5s;" title="Budget: ${budget}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function refreshCharts() {
+            const council = document.getElementById('council-filter').value;
+            const period = document.getElementById('period-filter').value;
+            
+            // Show loading
+            const chartsContainer = document.getElementById('charts-container');
+            const originalContent = chartsContainer.innerHTML;
+            chartsContainer.innerHTML = '<div class="chart-placeholder">🔄 Refreshing charts...</div>';
+            
+            // Simulate data refresh
+            setTimeout(() => {
+                chartsContainer.innerHTML = originalContent;
+                alert(`📊 Charts refreshed for ${council === 'all' ? 'All Councils' : council} (${period} days period)`);
+            }, 1500);
+        }
+
         // Try enhanced features after page load
-        setTimeout(loadEnhancedFeatures, 1000);
+        setTimeout(() => {
+            populateCouncilDropdown();
+            loadEnhancedFeatures();
+        }, 1000);
     </script>
 
     <!-- Optional: Try to load Chart.js for enhanced features -->
