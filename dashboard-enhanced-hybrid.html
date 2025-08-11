@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Enhanced Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .card { background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 2rem 0; }
+        .stat-card { background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; position: relative; overflow: hidden; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .stat-card::before { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%); }
+        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .blue { color: #1e40af; } .green { color: #059669; } .red { color: #dc2626; } .purple { color: #7c3aed; } .orange { color: #ea580c; } .indigo { color: #4f46e5; }
+        .module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin: 2rem 0; }
+        .module-card { background: white; border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 2rem; cursor: pointer; transition: all 0.3s; text-decoration: none; color: inherit; }
+        .module-card:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); color: inherit; }
+        .module-icon { font-size: 3rem; text-align: center; margin-bottom: 1rem; }
+        .btn { background: #3b82f6; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 0.375rem; cursor: pointer; text-decoration: none; display: inline-block; margin: 0.5rem; transition: background 0.2s; }
+        .btn:hover { background: #2563eb; }
+        .btn-success { background: #059669; } .btn-success:hover { background: #047857; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .progress-ring { transform: rotate(-90deg); width: 120px; height: 120px; }
+        .progress-ring-circle { stroke-dasharray: 251.2; stroke-dashoffset: 251.2; transition: stroke-dashoffset 0.8s ease-in-out; }
+        .chart-container { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin: 1rem 0; min-height: 300px; }
+        .map-container { height: 400px; width: 100%; border-radius: 0.5rem; overflow: hidden; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #6b7280; }
+        .filter-tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .filter-tab { padding: 0.5rem 1rem; border-radius: 0.375rem; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; transition: all 0.2s; font-size: 0.875rem; }
+        .filter-tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .filter-tab:hover { background: #f3f4f6; }
+        .filter-tab.active:hover { background: #2563eb; }
+        .quick-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .quick-stat { text-align: center; padding: 1rem; background: #f8fafc; border-radius: 0.375rem; }
+        .alert-panel { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0; border-left: 4px solid #f59e0b; }
+        .notification-item { background: white; border-left: 4px solid #3b82f6; padding: 1rem; margin: 0.5rem 0; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .notification-item.urgent { border-left-color: #ef4444; }
+        .notification-item.success { border-left-color: #10b981; }
+        .notification-item.warning { border-left-color: #f59e0b; }
+        .activity-timeline { max-height: 400px; overflow-y: auto; }
+        .activity-item { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #e5e7eb; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+        .activity-icon.project { background: #dbeafe; color: #1e40af; }
+        .activity-icon.budget { background: #d1fae5; color: #065f46; }
+        .activity-icon.milestone { background: #fef3c7; color: #92400e; }
+        .activity-icon.user { background: #e9d5ff; color: #7c3aed; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Sierra Leone Enhanced Dashboard</h1>
+        <p>Advanced Project Management & Analytics Platform</p>
+        <div id="user-info" style="opacity: 0.8; font-size: 0.9rem;"></div>
+        <div id="current-time" style="opacity: 0.7; font-size: 0.8rem; margin-top: 0.5rem;"></div>
+    </div>
+
+    <div class="container">
+        <!-- Quick Filter Tabs -->
+        <div class="filter-tabs">
+            <div class="filter-tab active" onclick="setFilter('all')">🏛️ All Councils</div>
+            <div class="filter-tab" onclick="setFilter('freetown')">🌆 Freetown</div>
+            <div class="filter-tab" onclick="setFilter('bo')">🏘️ Bo</div>
+            <div class="filter-tab" onclick="setFilter('kenema')">🌳 Kenema</div>
+            <div class="filter-tab" onclick="setFilter('makeni')">⛰️ Makeni</div>
+            <div class="filter-tab" onclick="setFilter('active')">⚡ Active Projects</div>
+            <div class="filter-tab" onclick="setFilter('urgent')">🚨 Urgent</div>
+        </div>
+
+        <!-- Enhanced KPI Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number blue" id="total-projects">245</div>
+                <div>Total Projects</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Across 16 Councils</div>
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: center;">
+                        <svg class="progress-ring" width="60" height="60">
+                            <circle class="progress-ring-circle" stroke="#3b82f6" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dashoffset: 62.8;"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number green" id="completion-rate">67.8%</div>
+                <div>Completion Rate</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Above Target (65%)</div>
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: center;">
+                        <svg class="progress-ring" width="60" height="60">
+                            <circle class="progress-ring-circle" stroke="#10b981" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dashoffset: 81.4;"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number red" id="total-budget">SLL 125B</div>
+                <div>Total Budget</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">70% Utilized</div>
+                <div class="quick-stats" style="margin-top: 1rem;">
+                    <div class="quick-stat">
+                        <div style="font-weight: bold; color: #059669;">SLL 87.5B</div>
+                        <div style="font-size: 0.75rem;">Spent</div>
+                    </div>
+                    <div class="quick-stat">
+                        <div style="font-weight: bold; color: #6b7280;">SLL 37.5B</div>
+                        <div style="font-size: 0.75rem;">Remaining</div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number orange" id="active-councils">16</div>
+                <div>Active Councils</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">100% Participation</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number purple" id="milestones-completed">1,247</div>
+                <div>Milestones Completed</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">This Year</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number indigo" id="efficiency-score">8.7/10</div>
+                <div>Efficiency Score</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Excellent Performance</div>
+            </div>
+        </div>
+
+        <!-- Alert Panel -->
+        <div class="alert-panel" id="alerts-panel">
+            <h3 style="margin-top: 0;">⚠️ Attention Required</h3>
+            <div>
+                <strong>12 projects</strong> are behind schedule and require immediate attention. 
+                <button onclick="viewDelayedProjects()" class="btn" style="margin-left: 1rem;">View Details</button>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+            <!-- Performance Charts -->
+            <div class="chart-container">
+                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
+                    <h3>📈 Project Performance Trends</h3>
+                    <button onclick="refreshCharts()" class="btn btn-outline">🔄 Refresh</button>
+                </div>
+                <div id="performance-chart">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                <span style="font-size: 0.875rem;">Jan - Jun Progress</span>
+                                <span style="font-size: 0.875rem; color: #6b7280;">45% → 70%</span>
+                            </div>
+                            <div style="height: 40px; background: #f3f4f6; border-radius: 0.375rem; position: relative; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #10b981, #3b82f6); height: 100%; width: 70%; transition: width 1s ease-in-out; border-radius: 0.375rem;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                <span style="font-size: 0.875rem;">Budget Utilization</span>
+                                <span style="font-size: 0.875rem; color: #6b7280;">70%</span>
+                            </div>
+                            <div style="height: 40px; background: #f3f4f6; border-radius: 0.375rem; position: relative; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #f59e0b, #ef4444); height: 100%; width: 70%; transition: width 1s ease-in-out; border-radius: 0.375rem;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                <span style="font-size: 0.875rem;">Timeline Adherence</span>
+                                <span style="font-size: 0.875rem; color: #6b7280;">85%</span>
+                            </div>
+                            <div style="height: 40px; background: #f3f4f6; border-radius: 0.375rem; position: relative; overflow: hidden;">
+                                <div style="background: linear-gradient(90deg, #8b5cf6, #3b82f6); height: 100%; width: 85%; transition: width 1s ease-in-out; border-radius: 0.375rem;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Council Performance -->
+            <div class="chart-container">
+                <h3>🏛️ Top Performing Councils</h3>
+                <div id="council-performance">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div onclick="selectCouncil('freetown')" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: bold;">🌆 Freetown City Council</div>
+                                    <div style="font-size: 0.875rem; color: #6b7280;">45 projects • SLL 35B budget</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #059669;">80%</div>
+                                    <div style="font-size: 0.75rem; color: #6b7280;">completion</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div onclick="selectCouncil('bo')" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: bold;">🏘️ Bo City Council</div>
+                                    <div style="font-size: 0.875rem; color: #6b7280;">32 projects • SLL 18B budget</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">75%</div>
+                                    <div style="font-size: 0.75rem; color: #6b7280;">completion</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div onclick="selectCouncil('kenema')" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-weight: bold;">🌳 Kenema City Council</div>
+                                    <div style="font-size: 0.875rem; color: #6b7280;">28 projects • SLL 15B budget</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: #f59e0b;">70%</div>
+                                    <div style="font-size: 0.75rem; color: #6b7280;">completion</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map and Notifications Row -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin: 2rem 0;">
+            <!-- Interactive Map -->
+            <div class="chart-container">
+                <h3>🗺️ Sierra Leone Project Map</h3>
+                <div class="map-container" id="project-map">
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; margin-bottom: 1rem;">🗺️</div>
+                        <p>Interactive map showing project locations across Sierra Leone</p>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 2rem;">
+                            <div onclick="showMapRegion('north')" style="padding: 1rem; background: white; border-radius: 0.375rem; cursor: pointer; border: 1px solid #e5e7eb;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'">
+                                <div style="font-weight: bold;">🏔️ Northern Region</div>
+                                <div style="font-size: 0.875rem; color: #6b7280;">67 projects</div>
+                            </div>
+                            <div onclick="showMapRegion('southern')" style="padding: 1rem; background: white; border-radius: 0.375rem; cursor: pointer; border: 1px solid #e5e7eb;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'">
+                                <div style="font-weight: bold;">🌊 Southern Region</div>
+                                <div style="font-size: 0.875rem; color: #6b7280;">89 projects</div>
+                            </div>
+                            <div onclick="showMapRegion('eastern')" style="padding: 1rem; background: white; border-radius: 0.375rem; cursor: pointer; border: 1px solid #e5e7eb;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'">
+                                <div style="font-weight: bold;">🌲 Eastern Region</div>
+                                <div style="font-size: 0.875rem; color: #6b7280;">54 projects</div>
+                            </div>
+                            <div onclick="showMapRegion('western')" style="padding: 1rem; background: white; border-radius: 0.375rem; cursor: pointer; border: 1px solid #e5e7eb;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='white'">
+                                <div style="font-weight: bold;">🏙️ Western Area</div>
+                                <div style="font-size: 0.875rem; color: #6b7280;">35 projects</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Notifications -->
+            <div class="chart-container">
+                <h3>🔔 Live Notifications</h3>
+                <div id="notifications-feed">
+                    <div class="notification-item success">
+                        <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                            <strong>Project Completed</strong>
+                            <span style="font-size: 0.75rem; color: #6b7280;">2 min ago</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.875rem;">Makeni Solar Lighting project successfully completed on schedule</p>
+                    </div>
+                    <div class="notification-item">
+                        <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                            <strong>Budget Update</strong>
+                            <span style="font-size: 0.75rem; color: #6b7280;">15 min ago</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.875rem;">Freetown Roads project budget approved - SLL 15B allocated</p>
+                    </div>
+                    <div class="notification-item warning">
+                        <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                            <strong>Milestone Delayed</strong>
+                            <span style="font-size: 0.75rem; color: #6b7280;">1 hour ago</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.875rem;">Kenema Water Supply Phase 2 delayed by 2 weeks</p>
+                    </div>
+                    <div class="notification-item urgent">
+                        <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                            <strong>Action Required</strong>
+                            <span style="font-size: 0.75rem; color: #6b7280;">2 hours ago</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.875rem;">Bo Market renovation requires environmental clearance review</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Timeline -->
+        <div class="card">
+            <h3>📈 Recent Activity Timeline</h3>
+            <div class="activity-timeline">
+                <div class="activity-item">
+                    <div class="activity-icon project">🏗️</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold;">New Project Initiated</div>
+                        <div style="font-size: 0.875rem; color: #6b7280;">Koinadugu Bridge Construction project started in Northern Province</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">Today, 11:30 AM</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon budget">💰</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold;">Budget Allocation Approved</div>
+                        <div style="font-size: 0.875rem; color: #6b7280;">SLL 8.5B approved for Bo Market renovation Phase 3</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">Today, 10:15 AM</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon milestone">🎯</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold;">Milestone Achieved</div>
+                        <div style="font-size: 0.875rem; color: #6b7280;">Freetown Roads Phase 1 foundation work completed (65% overall progress)</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">Yesterday, 4:20 PM</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon user">👤</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold;">Team Assignment</div>
+                        <div style="font-size: 0.875rem; color: #6b7280;">3 new engineers assigned to Kenema Water Supply project</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">Yesterday, 2:45 PM</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon project">🏗️</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold;">Project Status Update</div>
+                        <div style="font-size: 0.875rem; color: #6b7280;">Makeni Solar Lighting moved to final inspection phase</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">2 days ago, 1:30 PM</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions & Modules -->
+        <div class="card">
+            <h3>🚀 Quick Actions & Modules</h3>
+            <div class="module-grid">
+                <a href="/admin.html" class="module-card">
+                    <div class="module-icon">⚙️</div>
+                    <h4>System Administration</h4>
+                    <p>Manage users, councils, and system settings</p>
+                </a>
+                <a href="/reports.html" class="module-card">
+                    <div class="module-icon">📊</div>
+                    <h4>Advanced Reports</h4>
+                    <p>Generate comprehensive analytics and reports</p>
+                </a>
+                <a href="/auditor.html" class="module-card">
+                    <div class="module-icon">🔍</div>
+                    <h4>Audit Dashboard</h4>
+                    <p>Financial compliance and audit trails</p>
+                </a>
+                <div class="module-card" onclick="createNewProject()">
+                    <div class="module-icon">➕</div>
+                    <h4>New Project</h4>
+                    <p>Initiate a new development project</p>
+                </div>
+                <div class="module-card" onclick="viewProjectMap()">
+                    <div class="module-icon">🗺️</div>
+                    <h4>Project Mapping</h4>
+                    <p>Geographic view of all projects</p>
+                </div>
+                <div class="module-card" onclick="exportDashboard()">
+                    <div class="module-icon">📤</div>
+                    <h4>Export Data</h4>
+                    <p>Download dashboard data and reports</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="card">
+            <h2>🔗 Navigation</h2>
+            <a href="/dashboard.html" class="btn">📊 Basic Dashboard</a>
+            <a href="/admin.html" class="btn">⚙️ Admin Panel</a>
+            <a href="/reports.html" class="btn">📋 Reports</a>
+            <a href="/auditor.html" class="btn">🔍 Auditor</a>
+            <a href="/login.html" class="btn">🏠 Login</a>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentFilter = 'all';
+        let liveUpdates = true;
+
+        // Filter functionality
+        function setFilter(filter) {
+            currentFilter = filter;
+            
+            // Update active tab
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update data based on filter
+            updateDashboardData(filter);
+            showMessage(`📊 Dashboard filtered for: ${getFilterName(filter)}`, false);
+        }
+
+        function getFilterName(filter) {
+            const names = {
+                'all': 'All Councils',
+                'freetown': 'Freetown City Council',
+                'bo': 'Bo City Council', 
+                'kenema': 'Kenema City Council',
+                'makeni': 'Makeni City Council',
+                'active': 'Active Projects Only',
+                'urgent': 'Urgent Items Only'
+            };
+            return names[filter] || filter;
+        }
+
+        function updateDashboardData(filter) {
+            // Simulate data updates based on filter
+            const data = getFilteredData(filter);
+            
+            // Update KPI cards
+            document.getElementById('total-projects').textContent = data.totalProjects;
+            document.getElementById('completion-rate').textContent = data.completionRate + '%';
+            document.getElementById('total-budget').textContent = 'SLL ' + data.totalBudget + 'B';
+            document.getElementById('active-councils').textContent = data.activeCouncils;
+            
+            // Update alerts if urgent
+            if (filter === 'urgent') {
+                document.getElementById('alerts-panel').style.display = 'block';
+            }
+        }
+
+        function getFilteredData(filter) {
+            const allData = {
+                totalProjects: 245,
+                completionRate: 67.8,
+                totalBudget: 125,
+                activeCouncils: 16
+            };
+            
+            switch(filter) {
+                case 'freetown':
+                    return { totalProjects: 45, completionRate: 80, totalBudget: 35, activeCouncils: 1 };
+                case 'bo':
+                    return { totalProjects: 32, completionRate: 75, totalBudget: 18, activeCouncils: 1 };
+                case 'kenema':
+                    return { totalProjects: 28, completionRate: 70, totalBudget: 15, activeCouncils: 1 };
+                case 'makeni':
+                    return { totalProjects: 21, completionRate: 72, totalBudget: 12, activeCouncils: 1 };
+                case 'active':
+                    return { totalProjects: 186, completionRate: 45, totalBudget: 89, activeCouncils: 16 };
+                case 'urgent':
+                    return { totalProjects: 12, completionRate: 25, totalBudget: 8, activeCouncils: 8 };
+                default:
+                    return allData;
+            }
+        }
+
+        // Interactive functions
+        function refreshCharts() {
+            showMessage('🔄 Refreshing performance data...', false);
+            
+            // Simulate refresh animation
+            const performanceChart = document.getElementById('performance-chart');
+            performanceChart.style.opacity = '0.5';
+            
+            setTimeout(() => {
+                performanceChart.style.opacity = '1';
+                showMessage('✅ Dashboard data refreshed successfully', false);
+            }, 1500);
+        }
+
+        function selectCouncil(council) {
+            setFilter(council);
+        }
+
+        function showMapRegion(region) {
+            showMessage(`🗺️ Showing projects in ${region} region`, false);
+        }
+
+        function viewDelayedProjects() {
+            showMessage('📋 Opening delayed projects report...', false);
+        }
+
+        function createNewProject() {
+            showMessage('➕ Opening new project creation wizard...', false);
+        }
+
+        function viewProjectMap() {
+            showMessage('🗺️ Opening full project mapping interface...', false);
+        }
+
+        function exportDashboard() {
+            showMessage('📤 Preparing dashboard export...', false);
+        }
+
+        // Update current time
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('current-time').textContent = timeString;
+        }
+
+        // Live updates simulation
+        function simulateLiveUpdates() {
+            if (!liveUpdates) return;
+            
+            // Simulate random updates every 30 seconds
+            setTimeout(() => {
+                const updates = [
+                    'New milestone completed in Freetown Roads project',
+                    'Budget approval received for Bo Market expansion',
+                    'Environmental clearance obtained for Kenema Water project',
+                    'Construction team deployed to Makeni Solar project site'
+                ];
+                
+                const randomUpdate = updates[Math.floor(Math.random() * updates.length)];
+                addNotification(randomUpdate, 'info');
+                
+                simulateLiveUpdates();
+            }, 30000);
+        }
+
+        function addNotification(message, type = 'info') {
+            const feed = document.getElementById('notifications-feed');
+            const notification = document.createElement('div');
+            
+            const typeClasses = {
+                'success': 'notification-item success',
+                'warning': 'notification-item warning', 
+                'urgent': 'notification-item urgent',
+                'info': 'notification-item'
+            };
+            
+            notification.className = typeClasses[type] || 'notification-item';
+            notification.innerHTML = `
+                <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                    <strong>Live Update</strong>
+                    <span style="font-size: 0.75rem; color: #6b7280;">Just now</span>
+                </div>
+                <p style="margin: 0; font-size: 0.875rem;">${message}</p>
+            `;
+            
+            feed.insertBefore(notification, feed.firstChild);
+            
+            // Remove oldest notification if more than 5
+            if (feed.children.length > 5) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        // Message display function
+        function showMessage(message, isError = false) {
+            let messageDiv = document.getElementById('dashboard-message');
+            if (!messageDiv) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'dashboard-message';
+                messageDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0.5rem;
+                    font-weight: 500;
+                    z-index: 1000;
+                    transition: all 0.3s;
+                    max-width: 400px;
+                `;
+                document.body.appendChild(messageDiv);
+            }
+            
+            messageDiv.textContent = message;
+            messageDiv.style.background = isError ? '#fee2e2' : '#d1fae5';
+            messageDiv.style.color = isError ? '#991b1b' : '#065f46';
+            messageDiv.style.border = isError ? '1px solid #fecaca' : '1px solid #a7f3d0';
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                if (messageDiv) {
+                    messageDiv.style.display = 'none';
+                }
+            }, 3000);
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication
+            try {
+                const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                if (user.id) {
+                    document.getElementById('user-info').innerHTML = 
+                        `Welcome, ${user.full_name} • ${user.role || 'User'} • Enhanced Dashboard`;
+                } else {
+                    document.getElementById('user-info').innerHTML = 
+                        `Demo Mode • Enhanced Dashboard • Sierra Leone PPMS`;
+                }
+            } catch (error) {
+                console.log('User info not available, using demo mode');
+                document.getElementById('user-info').innerHTML = 
+                    `Demo Mode • Enhanced Dashboard • Sierra Leone PPMS`;
+            }
+
+            // Start live features
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 60000); // Update time every minute
+            
+            simulateLiveUpdates();
+            
+            // Initialize with welcome message
+            setTimeout(() => {
+                showMessage('🎉 Welcome to the Enhanced Dashboard! All systems operational.', false);
+            }, 1000);
+        });
+
+        // Handle visibility change to pause/resume live updates
+        document.addEventListener('visibilitychange', function() {
+            liveUpdates = !document.hidden;
+            if (liveUpdates) {
+                simulateLiveUpdates();
+            }
+        });
+    </script>
+</body>
+</html>
