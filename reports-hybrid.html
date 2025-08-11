@@ -479,14 +479,67 @@
             
             // Show loading
             const chartsContainer = document.getElementById('charts-container');
-            const originalContent = chartsContainer.innerHTML;
-            chartsContainer.innerHTML = '<div class="chart-placeholder">🔄 Refreshing charts...</div>';
+            chartsContainer.innerHTML = '<div class="chart-placeholder">🔄 Refreshing charts for ' + 
+                (council === 'all' ? 'All Councils' : getCouncilName(council)) + 
+                ' (' + period + ' days)...</div>';
             
-            // Simulate data refresh
+            // Simulate data refresh and regenerate charts
             setTimeout(() => {
-                chartsContainer.innerHTML = originalContent;
-                alert(`📊 Charts refreshed for ${council === 'all' ? 'All Councils' : council} (${period} days period)`);
+                // Regenerate charts with updated data
+                if (typeof Chart !== 'undefined') {
+                    initializeCharts();
+                } else {
+                    loadAlternativeCharts();
+                }
+                
+                // Show success message
+                showMessage(`📊 Charts updated for ${council === 'all' ? 'All Councils' : getCouncilName(council)} (${period} days period)`, false);
             }, 1500);
+        }
+        
+        function getCouncilName(councilId) {
+            const councils = {
+                'freetown': 'Freetown City Council',
+                'bo': 'Bo City Council',
+                'kenema': 'Kenema City Council',
+                'makeni': 'Makeni City Council',
+                'koidu': 'Koidu New Sembehun City Council',
+                'port-loko': 'Port Loko City Council',
+                'bonthe': 'Bonthe Municipal Council',
+                'moyamba': 'Moyamba District Council'
+            };
+            return councils[councilId] || councilId;
+        }
+        
+        function showMessage(message, isError = false) {
+            // Create or update message display
+            let messageDiv = document.getElementById('filter-message');
+            if (!messageDiv) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'filter-message';
+                messageDiv.style.cssText = `
+                    padding: 0.75rem 1rem;
+                    border-radius: 0.375rem;
+                    margin: 1rem 0;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    transition: all 0.3s;
+                `;
+                document.querySelector('.filter-panel').appendChild(messageDiv);
+            }
+            
+            messageDiv.textContent = message;
+            messageDiv.style.background = isError ? '#fee2e2' : '#d1fae5';
+            messageDiv.style.color = isError ? '#991b1b' : '#065f46';
+            messageDiv.style.border = isError ? '1px solid #fecaca' : '1px solid #a7f3d0';
+            messageDiv.style.display = 'block';
+            
+            // Hide message after 3 seconds
+            setTimeout(() => {
+                if (messageDiv) {
+                    messageDiv.style.display = 'none';
+                }
+            }, 3000);
         }
 
         // Try enhanced features after page load
