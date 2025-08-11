@@ -28,16 +28,30 @@ def index():
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    """Serve static files with proper error handling"""
+    """Serve static files with hybrid page routing"""
+    # Route broken pages to their working hybrid equivalents
+    page_mappings = {
+        'reports.html': 'reports-hybrid.html',
+        'auditor.html': 'auditor-hybrid.html', 
+        'dashboard-enhanced.html': 'dashboard-enhanced-hybrid.html'
+    }
+    
+    # Use hybrid version if mapped
+    if filename in page_mappings:
+        filename = page_mappings[filename]
+        print(f"Routing to hybrid version: {filename}")
+    
     try:
         return send_from_directory('.', filename)
     except Exception as e:
         print(f"Error serving {filename}: {e}")
-        # Fallback for problematic pages
-        if filename in ['reports.html', 'auditor.html', 'dashboard-enhanced.html']:
-            fallback = filename.replace('.html', '-simple.html')
-            if os.path.exists(fallback):
-                return send_from_directory('.', fallback)
+        # Additional fallback for any remaining issues
+        if 'reports' in filename:
+            return send_from_directory('.', 'reports-hybrid.html')
+        elif 'auditor' in filename:
+            return send_from_directory('.', 'auditor-hybrid.html')
+        elif 'dashboard-enhanced' in filename:
+            return send_from_directory('.', 'dashboard-enhanced-hybrid.html')
         return f"File not found: {filename}", 404
 
 @app.route('/health')

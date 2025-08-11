@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Auditor Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+        .header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 2rem; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .card { background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 2rem 0; }
+        .stat-card { background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .blue { color: #1e40af; } .green { color: #059669; } .red { color: #dc2626; } .purple { color: #7c3aed; } .orange { color: #ea580c; } .yellow { color: #ca8a04; }
+        .tabs { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 2rem; }
+        .tab { padding: 1rem 2rem; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; transition: all 0.2s; }
+        .tab.active { border-bottom-color: #dc2626; color: #dc2626; }
+        .tab:hover { background: #fef2f2; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .btn { background: #dc2626; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 0.375rem; cursor: pointer; text-decoration: none; display: inline-block; margin: 0.5rem; transition: background 0.2s; }
+        .btn:hover { background: #b91c1c; }
+        .btn-success { background: #059669; } .btn-success:hover { background: #047857; }
+        .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; } .btn-outline:hover { background: #f9fafb; }
+        .table { width: 100%; border-collapse: collapse; background: white; border-radius: 0.5rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .table th { background: #f9fafb; padding: 0.75rem; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; }
+        .table td { padding: 0.75rem; border-bottom: 1px solid #e5e7eb; }
+        .table tr:hover { background: #f8fafc; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .filter-panel { background: #fef2f2; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; border-left: 4px solid #dc2626; }
+        .filter-panel select, .filter-panel input { margin: 0.25rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.25rem; }
+        .audit-item { background: white; border-left: 4px solid #dc2626; padding: 1rem; margin: 0.5rem 0; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .audit-item.validation { border-left-color: #8b5cf6; }
+        .audit-item.milestone { border-left-color: #f59e0b; }
+        .audit-item.document { border-left-color: #10b981; }
+        .progress-bar { width: 100%; background: #e5e7eb; border-radius: 9999px; height: 8px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
+        .progress-fill.completed { background: #10b981; }
+        .progress-fill.delayed { background: #ef4444; }
+        .chart-container { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Sierra Leone Auditor Dashboard</h1>
+        <p>Financial & Compliance Audit System</p>
+        <div id="user-info" style="opacity: 0.8; font-size: 0.9rem;"></div>
+    </div>
+
+    <div class="container">
+        <!-- Key Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number blue">245</div>
+                <div>Total Projects</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Under Review</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number green">156</div>
+                <div>Validated Projects</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">This Month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number red">SLL 125B</div>
+                <div>Total Budget</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Under Audit</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number orange">92%</div>
+                <div>Compliance Rate</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Excellent</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number yellow">23</div>
+                <div>Pending Reviews</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Requires Action</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number purple">3</div>
+                <div>Issues Found</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Low Risk</div>
+            </div>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('overview')">📊 Overview</div>
+                <div class="tab" onclick="showTab('projects')">🏗️ Projects Audit</div>
+                <div class="tab" onclick="showTab('validations')">✅ Validations</div>
+                <div class="tab" onclick="showTab('compliance')">🔍 Compliance</div>
+                <div class="tab" onclick="showTab('reports')">📋 Audit Reports</div>
+            </div>
+
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-content active">
+                <h2>📈 Audit Overview</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                    <div class="chart-container">
+                        <h3>Project Validation Status</h3>
+                        <div id="validation-chart">
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>✅ Approved</span>
+                                    <span>156 (63.7%)</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill completed" style="width: 63.7%;"></div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>⏳ Pending</span>
+                                    <span>67 (27.3%)</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill" style="width: 27.3%;"></div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>❌ Rejected</span>
+                                    <span>22 (9.0%)</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill delayed" style="width: 9.0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Budget Compliance by Council</h3>
+                        <div id="budget-chart">
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Freetown</span>
+                                    <span>95%</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill completed" style="width: 95%;"></div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Bo</span>
+                                    <span>87%</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill" style="width: 87%;"></div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Kenema</span>
+                                    <span>92%</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill completed" style="width: 92%;"></div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Makeni</span>
+                                    <span>78%</span>
+                                    <div class="progress-bar" style="width: 200px;">
+                                        <div class="progress-fill delayed" style="width: 78%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>🚨 Recent Audit Activities</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <div class="audit-item">
+                            <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                                <strong>Project Budget Validation</strong>
+                                <span style="font-size: 0.875rem; color: #6b7280;">2 hours ago</span>
+                            </div>
+                            <p>Freetown Roads Improvement - Budget allocation approved (SLL 15B)</p>
+                            <span class="badge badge-green">Approved</span>
+                        </div>
+                        <div class="audit-item validation">
+                            <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                                <strong>Milestone Verification</strong>
+                                <span style="font-size: 0.875rem; color: #6b7280;">5 hours ago</span>
+                            </div>
+                            <p>Bo Market Renovation - Phase 2 completion verified</p>
+                            <span class="badge badge-blue">Validated</span>
+                        </div>
+                        <div class="audit-item milestone">
+                            <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                                <strong>Document Review</strong>
+                                <span style="font-size: 0.875rem; color: #6b7280;">1 day ago</span>
+                            </div>
+                            <p>Kenema Water Supply - Environmental impact assessment reviewed</p>
+                            <span class="badge badge-yellow">Under Review</span>
+                        </div>
+                        <div class="audit-item document">
+                            <div style="display: flex; justify-content: between; margin-bottom: 0.5rem;">
+                                <strong>Compliance Check</strong>
+                                <span style="font-size: 0.875rem; color: #6b7280;">2 days ago</span>
+                            </div>
+                            <p>Makeni Solar Project - All documentation complete and compliant</p>
+                            <span class="badge badge-green">Compliant</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects Tab -->
+            <div id="projects" class="tab-content">
+                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 2rem;">
+                    <h2>🏗️ Project Audit Status</h2>
+                    <button onclick="exportData('projects')" class="btn">📤 Export CSV</button>
+                </div>
+                
+                <div class="filter-panel">
+                    <label>Council: 
+                        <select id="project-council-filter">
+                            <option value="all">All Councils</option>
+                            <option value="freetown">Freetown City Council</option>
+                            <option value="bo">Bo City Council</option>
+                            <option value="kenema">Kenema City Council</option>
+                            <option value="makeni">Makeni City Council</option>
+                        </select>
+                    </label>
+                    <label>Status: 
+                        <select id="project-status-filter">
+                            <option value="all">All Status</option>
+                            <option value="approved">Approved</option>
+                            <option value="pending">Pending</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </label>
+                    <button onclick="filterProjects()" class="btn">🔍 Filter</button>
+                </div>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Council</th>
+                            <th>Budget (SLL)</th>
+                            <th>Completion</th>
+                            <th>Audit Status</th>
+                            <th>Last Review</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projects-table">
+                        <tr>
+                            <td><strong>Freetown Roads Improvement</strong><br><small>Infrastructure Development</small></td>
+                            <td>Freetown</td>
+                            <td>SLL 15.0B</td>
+                            <td>65%<br><div class="progress-bar"><div class="progress-fill" style="width: 65%;"></div></div></td>
+                            <td><span class="badge badge-green">Approved</span></td>
+                            <td>2 hours ago</td>
+                            <td><button onclick="viewProject(1)" class="btn btn-outline">👁️ Review</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bo Market Renovation</strong><br><small>Commercial Infrastructure</small></td>
+                            <td>Bo</td>
+                            <td>SLL 8.5B</td>
+                            <td>80%<br><div class="progress-bar"><div class="progress-fill completed" style="width: 80%;"></div></div></td>
+                            <td><span class="badge badge-blue">Under Review</span></td>
+                            <td>5 hours ago</td>
+                            <td><button onclick="viewProject(2)" class="btn btn-outline">👁️ Review</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Kenema Water Supply</strong><br><small>Water & Sanitation</small></td>
+                            <td>Kenema</td>
+                            <td>SLL 12.0B</td>
+                            <td>45%<br><div class="progress-bar"><div class="progress-fill delayed" style="width: 45%;"></div></div></td>
+                            <td><span class="badge badge-yellow">Pending</span></td>
+                            <td>1 day ago</td>
+                            <td><button onclick="viewProject(3)" class="btn btn-outline">👁️ Review</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Makeni Solar Lighting</strong><br><small>Energy Infrastructure</small></td>
+                            <td>Makeni</td>
+                            <td>SLL 4.2B</td>
+                            <td>100%<br><div class="progress-bar"><div class="progress-fill completed" style="width: 100%;"></div></div></td>
+                            <td><span class="badge badge-green">Approved</span></td>
+                            <td>3 days ago</td>
+                            <td><button onclick="viewProject(4)" class="btn btn-outline">👁️ Review</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Validations Tab -->
+            <div id="validations" class="tab-content">
+                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 2rem;">
+                    <h2>✅ Project Validations</h2>
+                    <button onclick="exportData('validations')" class="btn">📤 Export CSV</button>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Validation Queue (23 Pending)</h3>
+                    <div style="max-height: 500px; overflow-y: auto;">
+                        <div class="audit-item validation">
+                            <div style="display: flex; justify-content: between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <strong>Budget Update - Koidu Waste Management</strong>
+                                    <p style="margin: 0.5rem 0;">Requesting budget increase from SLL 6.8B to SLL 7.2B due to material cost changes</p>
+                                    <small style="color: #6b7280;">Submitted: 3 hours ago by Council Administrator</small>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button onclick="validateProject('approve', 5)" class="btn btn-success">✅ Approve</button>
+                                    <button onclick="validateProject('reject', 5)" class="btn">❌ Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="audit-item validation">
+                            <div style="display: flex; justify-content: between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <strong>Milestone Completion - Port Loko Bridge</strong>
+                                    <p style="margin: 0.5rem 0;">Foundation work completed - requesting milestone validation and payment release</p>
+                                    <small style="color: #6b7280;">Submitted: 6 hours ago by Project Manager</small>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button onclick="validateProject('approve', 6)" class="btn btn-success">✅ Approve</button>
+                                    <button onclick="validateProject('reject', 6)" class="btn">❌ Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="audit-item validation">
+                            <div style="display: flex; justify-content: between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <strong>Timeline Extension - Bonthe Port Development</strong>
+                                    <p style="margin: 0.5rem 0;">Requesting 60-day extension due to weather delays and material shortages</p>
+                                    <small style="color: #6b7280;">Submitted: 1 day ago by Regional Coordinator</small>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button onclick="validateProject('approve', 7)" class="btn btn-success">✅ Approve</button>
+                                    <button onclick="validateProject('reject', 7)" class="btn">❌ Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compliance Tab -->
+            <div id="compliance" class="tab-content">
+                <h2>🔍 Compliance Monitoring</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                    <div class="chart-container">
+                        <h3>Overall Compliance Score</h3>
+                        <div style="text-align: center; padding: 2rem;">
+                            <div style="font-size: 4rem; font-weight: bold; color: #059669; margin-bottom: 1rem;">92%</div>
+                            <div style="font-size: 1.2rem; color: #6b7280;">Excellent Compliance</div>
+                            <div style="margin-top: 1rem;">
+                                <div class="progress-bar" style="height: 12px;">
+                                    <div class="progress-fill completed" style="width: 92%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Risk Assessment</h3>
+                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>🟢 Low Risk</span>
+                                <span>89% (218 projects)</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>🟡 Medium Risk</span>
+                                <span>8% (19 projects)</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>🔴 High Risk</span>
+                                <span>3% (8 projects)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>⚠️ Issues Requiring Attention</h3>
+                    <div class="audit-item" style="border-left-color: #ef4444;">
+                        <strong>Documentation Gap - Moyamba Rural Roads</strong>
+                        <p>Environmental clearance certificate missing for road construction project</p>
+                        <div style="margin-top: 1rem;">
+                            <span class="badge badge-red">High Priority</span>
+                            <button onclick="resolveIssue(1)" class="btn" style="float: right;">🔧 Take Action</button>
+                        </div>
+                    </div>
+                    <div class="audit-item" style="border-left-color: #f59e0b;">
+                        <strong>Budget Variance - Kailahun School Project</strong>
+                        <p>Actual spending 15% above approved budget - requires justification</p>
+                        <div style="margin-top: 1rem;">
+                            <span class="badge badge-yellow">Medium Priority</span>
+                            <button onclick="resolveIssue(2)" class="btn" style="float: right;">🔧 Take Action</button>
+                        </div>
+                    </div>
+                    <div class="audit-item" style="border-left-color: #f59e0b;">
+                        <strong>Timeline Delay - Koinadugu Water System</strong>
+                        <p>Project is 45 days behind schedule without formal extension request</p>
+                        <div style="margin-top: 1rem;">
+                            <span class="badge badge-yellow">Medium Priority</span>
+                            <button onclick="resolveIssue(3)" class="btn" style="float: right;">🔧 Take Action</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reports" class="tab-content">
+                <h2>📋 Audit Reports</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin: 2rem 0;">
+                    <div style="border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; cursor: pointer; transition: all 0.3s;" onclick="generateAuditReport('compliance')">
+                        <div style="font-size: 3rem; text-align: center; margin-bottom: 1rem;">🔍</div>
+                        <h3>Compliance Report</h3>
+                        <p>Comprehensive compliance analysis across all councils and projects</p>
+                        <div style="color: #6b7280; font-size: 0.875rem;">
+                            • Overall compliance scores<br>
+                            • Risk assessments<br>
+                            • Issue tracking
+                        </div>
+                    </div>
+                    <div style="border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; cursor: pointer; transition: all 0.3s;" onclick="generateAuditReport('financial')">
+                        <div style="font-size: 3rem; text-align: center; margin-bottom: 1rem;">💰</div>
+                        <h3>Financial Audit Report</h3>
+                        <p>Budget utilization and financial compliance analysis</p>
+                        <div style="color: #6b7280; font-size: 0.875rem;">
+                            • Budget vs actual spending<br>
+                            • Variance analysis<br>
+                            • Cost overruns
+                        </div>
+                    </div>
+                    <div style="border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; cursor: pointer; transition: all 0.3s;" onclick="generateAuditReport('performance')">
+                        <div style="font-size: 3rem; text-align: center; margin-bottom: 1rem;">📊</div>
+                        <h3>Performance Report</h3>
+                        <p>Project performance and milestone achievement analysis</p>
+                        <div style="color: #6b7280; font-size: 0.875rem;">
+                            • Milestone completion rates<br>
+                            • Timeline adherence<br>
+                            • Quality metrics
+                        </div>
+                    </div>
+                </div>
+
+                <div id="report-results" class="chart-container" style="display: none;">
+                    <h3>📋 Generated Report</h3>
+                    <div id="report-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="card">
+            <h2>🔗 Navigation</h2>
+            <a href="/dashboard.html" class="btn">📊 Dashboard</a>
+            <a href="/admin.html" class="btn">⚙️ Admin Panel</a>
+            <a href="/reports-hybrid.html" class="btn">📊 Reports</a>
+            <a href="/login.html" class="btn">🏠 Login</a>
+        </div>
+    </div>
+
+    <script>
+        // Tab functionality
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        // Project filtering
+        function filterProjects() {
+            const council = document.getElementById('project-council-filter').value;
+            const status = document.getElementById('project-status-filter').value;
+            
+            showMessage(`🔍 Filtering projects for ${council === 'all' ? 'All Councils' : council} with status: ${status === 'all' ? 'All' : status}`, false);
+        }
+
+        // Project validation
+        function validateProject(action, projectId) {
+            const actionText = action === 'approve' ? 'Approved' : 'Rejected';
+            const actionColor = action === 'approve' ? '#059669' : '#dc2626';
+            
+            showMessage(`✅ Project ${projectId} has been ${actionText}`, false);
+            
+            // Simulate removing the item from the queue
+            event.target.closest('.audit-item').style.opacity = '0.5';
+            setTimeout(() => {
+                event.target.closest('.audit-item').style.display = 'none';
+            }, 500);
+        }
+
+        // View project details
+        function viewProject(projectId) {
+            showMessage(`👁️ Opening detailed audit view for Project ${projectId}`, false);
+        }
+
+        // Resolve compliance issues
+        function resolveIssue(issueId) {
+            showMessage(`🔧 Initiating resolution process for Issue ${issueId}`, false);
+        }
+
+        // Generate audit reports
+        function generateAuditReport(reportType) {
+            const reportResults = document.getElementById('report-results');
+            const reportContent = document.getElementById('report-content');
+            
+            reportContent.innerHTML = '<p>🔄 Generating audit report...</p>';
+            reportResults.style.display = 'block';
+            reportResults.scrollIntoView({ behavior: 'smooth' });
+            
+            setTimeout(() => {
+                let content = '';
+                switch(reportType) {
+                    case 'compliance':
+                        content = `
+                            <h4>🔍 Compliance Audit Report</h4>
+                            <div style="background: #f0fdf4; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0;">
+                                <h5>Executive Summary</h5>
+                                <p>Overall compliance rate: <strong>92%</strong> (Excellent)</p>
+                                <ul>
+                                    <li>218 projects in full compliance (89%)</li>
+                                    <li>19 projects with minor issues (8%)</li>
+                                    <li>8 projects requiring immediate attention (3%)</li>
+                                </ul>
+                                <h5>Key Findings</h5>
+                                <ul>
+                                    <li>Documentation completeness: 95%</li>
+                                    <li>Budget adherence: 88%</li>
+                                    <li>Timeline compliance: 78%</li>
+                                </ul>
+                            </div>
+                        `;
+                        break;
+                    case 'financial':
+                        content = `
+                            <h4>💰 Financial Audit Report</h4>
+                            <div style="background: #fefce8; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0;">
+                                <h5>Financial Overview</h5>
+                                <p>Total budget under audit: <strong>SLL 125 billion</strong></p>
+                                <ul>
+                                    <li>Budget utilization: 70% (SLL 87.5B)</li>
+                                    <li>Budget variance: ±3.2% (Within acceptable range)</li>
+                                    <li>Cost overruns: 12 projects (4.9%)</li>
+                                </ul>
+                                <h5>Budget Performance by Council</h5>
+                                <ul>
+                                    <li>Freetown: 95% compliance</li>
+                                    <li>Bo: 87% compliance</li>
+                                    <li>Kenema: 92% compliance</li>
+                                    <li>Makeni: 78% compliance</li>
+                                </ul>
+                            </div>
+                        `;
+                        break;
+                    case 'performance':
+                        content = `
+                            <h4>📊 Performance Audit Report</h4>
+                            <div style="background: #eff6ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0;">
+                                <h5>Performance Summary</h5>
+                                <p>Average project completion: <strong>67.8%</strong></p>
+                                <ul>
+                                    <li>On-time projects: 208 (85%)</li>
+                                    <li>Delayed projects: 37 (15%)</li>
+                                    <li>Quality score: 8.7/10</li>
+                                </ul>
+                                <h5>Milestone Achievement</h5>
+                                <ul>
+                                    <li>Completed milestones: 1,247</li>
+                                    <li>Pending milestones: 189</li>
+                                    <li>Overdue milestones: 23</li>
+                                </ul>
+                            </div>
+                        `;
+                        break;
+                }
+                
+                content += `
+                    <div style="margin-top: 2rem;">
+                        <button onclick="downloadReport('${reportType}')" class="btn">📥 Download PDF</button>
+                        <button onclick="exportReport('${reportType}')" class="btn">📊 Export Excel</button>
+                        <button onclick="scheduleReport('${reportType}')" class="btn btn-outline">⏰ Schedule</button>
+                    </div>
+                `;
+                
+                reportContent.innerHTML = content;
+            }, 2000);
+        }
+
+        // Export functions
+        function exportData(type) {
+            showMessage(`📤 Exporting ${type} data to CSV...`, false);
+        }
+
+        function downloadReport(type) {
+            showMessage(`📥 Downloading ${type} audit report as PDF...`, false);
+        }
+
+        function exportReport(type) {
+            showMessage(`📊 Exporting ${type} audit report to Excel...`, false);
+        }
+
+        function scheduleReport(type) {
+            showMessage(`⏰ Setting up scheduled ${type} audit report...`, false);
+        }
+
+        // Message display function
+        function showMessage(message, isError = false) {
+            let messageDiv = document.getElementById('audit-message');
+            if (!messageDiv) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'audit-message';
+                messageDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0.5rem;
+                    font-weight: 500;
+                    z-index: 1000;
+                    transition: all 0.3s;
+                    max-width: 400px;
+                `;
+                document.body.appendChild(messageDiv);
+            }
+            
+            messageDiv.textContent = message;
+            messageDiv.style.background = isError ? '#fee2e2' : '#d1fae5';
+            messageDiv.style.color = isError ? '#991b1b' : '#065f46';
+            messageDiv.style.border = isError ? '1px solid #fecaca' : '1px solid #a7f3d0';
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                if (messageDiv) {
+                    messageDiv.style.display = 'none';
+                }
+            }, 3000);
+        }
+
+        // User authentication check
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const user = JSON.parse(localStorage.getItem('ppms_user') || '{}');
+                if (user.id) {
+                    document.getElementById('user-info').innerHTML = 
+                        `Welcome, ${user.full_name} • Auditor • ${new Date().toLocaleDateString()}`;
+                } else {
+                    document.getElementById('user-info').innerHTML = 
+                        `Demo Mode • Auditor Dashboard • ${new Date().toLocaleDateString()}`;
+                }
+            } catch (error) {
+                console.log('User info not available, using demo mode');
+            }
+        });
+    </script>
+</body>
+</html>
