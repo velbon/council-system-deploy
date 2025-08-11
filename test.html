@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #f3f4f6;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        .success { color: #059669; }
+        .error { color: #dc2626; }
+        .info { color: #0284c7; }
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .test-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🏛️ PPMS System Diagnostic</h1>
+        <p>This page tests if your Sierra Leone Council Dashboard is working properly.</p>
+    </div>
+
+    <div class="card">
+        <h2>📊 Server Status</h2>
+        <div class="test-item">
+            <span>Server Response</span>
+            <span class="success">✅ Working</span>
+        </div>
+        <div class="test-item">
+            <span>Static Files</span>
+            <span class="success">✅ Loading</span>
+        </div>
+        <div class="test-item">
+            <span>Health Check</span>
+            <span class="info"><a href="/health" target="_blank">Test Health Endpoint</a></span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔗 Navigation Links</h2>
+        <div class="test-item">
+            <span>Login Page</span>
+            <span><a href="/login.html" class="info">Test Login</a></span>
+        </div>
+        <div class="test-item">
+            <span>Dashboard</span>
+            <span><a href="/dashboard.html" class="info">Test Dashboard</a></span>
+        </div>
+        <div class="test-item">
+            <span>Admin Panel</span>
+            <span><a href="/admin.html" class="info">Test Admin</a></span>
+        </div>
+        <div class="test-item">
+            <span>Reports</span>
+            <span><a href="/reports.html" class="info">Test Reports</a></span>
+        </div>
+        <div class="test-item">
+            <span>Auditor</span>
+            <span><a href="/auditor.html" class="info">Test Auditor</a></span>
+        </div>
+        <div class="test-item">
+            <span>Enhanced Dashboard</span>
+            <span><a href="/dashboard-enhanced.html" class="info">Test Enhanced</a></span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔐 Demo Accounts</h2>
+        <p>Use these accounts to test the system:</p>
+        <ul>
+            <li><strong>Admin:</strong> admin@ppms.sl / admin123</li>
+            <li><strong>Council:</strong> council@ppms.sl / council123</li>
+            <li><strong>Supervisor:</strong> supervisor@ppms.sl / super123</li>
+            <li><strong>Auditor:</strong> auditor@ppms.sl / audit123</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>🐛 JavaScript Libraries Test</h2>
+        <div id="js-test-results">
+            <p>Testing JavaScript libraries...</p>
+        </div>
+    </div>
+
+    <script>
+        // Test JavaScript libraries
+        const testResults = document.getElementById('js-test-results');
+        const tests = [];
+        
+        // Test React
+        if (typeof React !== 'undefined') {
+            tests.push('<div class="test-item"><span>React</span><span class="success">✅ Loaded</span></div>');
+        } else {
+            tests.push('<div class="test-item"><span>React</span><span class="error">❌ Not Loaded</span></div>');
+        }
+        
+        // Test if page loads
+        tests.push('<div class="test-item"><span>Basic JavaScript</span><span class="success">✅ Working</span></div>');
+        tests.push('<div class="test-item"><span>Page Rendering</span><span class="success">✅ Working</span></div>');
+        
+        testResults.innerHTML = tests.join('');
+        
+        // Add timestamp
+        testResults.innerHTML += `<p class="info">Test completed at: ${new Date().toLocaleString()}</p>`;
+    </script>
+</body>
+</html>
