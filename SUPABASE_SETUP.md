@@ -1,6 +1,20 @@
 # 🚀 Supabase Setup Guide for PPMS
 *Complete guide to set up real database for the Public Project Management System*
 
+## 🆘 QUICK FIX for Common Issues
+
+**If you're experiencing:**
+- ❌ Email confirmation redirecting to `localhost:3000`
+- ❌ Users not appearing in admin panel after creation
+- ❌ "User not allowed" errors
+
+**Quick Solution:**
+```bash
+python3 fix_supabase_config.py
+```
+
+This script will show you exactly what to fix in your Supabase configuration.
+
 ## 📋 Prerequisites
 - A modern web browser
 - Access to [supabase.com](https://supabase.com)
