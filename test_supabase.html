@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPMS - Supabase Connection Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-4xl mx-auto px-4">
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">🧪 PPMS Supabase Test</h1>
+                <p class="text-gray-600">Verify your Supabase database connection and setup</p>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="mb-8 p-6 bg-gray-50 rounded-lg">
+                <h2 class="text-xl font-semibold mb-4">📋 Configuration</h2>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Supabase URL:</label>
+                        <input type="url" id="supabaseUrl" 
+                               placeholder="https://your-project.supabase.co"
+                               class="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">API Key (anon public):</label>
+                        <input type="password" id="supabaseKey" 
+                               placeholder="eyJ..."
+                               class="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <button onclick="testConnection()" 
+                        class="mt-4 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition">
+                    🔌 Test Connection
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="space-y-4" id="testResults">
+                <!-- Test results will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let supabase = null;
+
+        // Default configuration (will be updated by configure_supabase.py)
+        const SUPABASE_URL = 'https://your-project.supabase.co';
+        const SUPABASE_ANON_KEY = 'your-anon-key';
+
+        // Pre-populate fields if configuration exists
+        window.onload = function() {
+            document.getElementById('supabaseUrl').value = SUPABASE_URL;
+            document.getElementById('supabaseKey').value = SUPABASE_ANON_KEY;
+            
+            // Auto-test if configuration looks real
+            if (!SUPABASE_URL.includes('your-project') && !SUPABASE_ANON_KEY.includes('your-anon-key')) {
+                setTimeout(testConnection, 1000);
+            }
+        };
+
+        function addTestResult(title, status, message, details = null) {
+            const resultsDiv = document.getElementById('testResults');
+            const statusColors = {
+                success: 'bg-green-50 border-green-200 text-green-800',
+                error: 'bg-red-50 border-red-200 text-red-800',
+                warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+                info: 'bg-blue-50 border-blue-200 text-blue-800'
+            };
+
+            const statusIcons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `p-4 border rounded-lg ${statusColors[status]}`;
+            resultDiv.innerHTML = `
+                <div class="flex items-start">
+                    <span class="text-xl mr-3">${statusIcons[status]}</span>
+                    <div class="flex-1">
+                        <h3 class="font-semibold">${title}</h3>
+                        <p class="mt-1">${message}</p>
+                        ${details ? `<pre class="mt-2 text-xs bg-white bg-opacity-50 p-2 rounded overflow-x-auto">${details}</pre>` : ''}
+                    </div>
+                </div>
+            `;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        async function testConnection() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+
+            // Clear previous results
+            document.getElementById('testResults').innerHTML = '';
+
+            // Validate inputs
+            if (!url || !key) {
+                addTestResult('Input Validation', 'error', 'Please provide both Supabase URL and API Key');
+                return;
+            }
+
+            if (!url.startsWith('https://') || !url.includes('.supabase.co')) {
+                addTestResult('URL Validation', 'error', 'Invalid Supabase URL format');
+                return;
+            }
+
+            if (!key.startsWith('eyJ')) {
+                addTestResult('API Key Validation', 'error', 'Invalid API key format (should start with "eyJ")');
+                return;
+            }
+
+            try {
+                // Initialize Supabase client
+                addTestResult('Connection', 'info', 'Initializing Supabase client...');
+                supabase = window.supabase.createClient(url, key);
+
+                // Test 1: Basic connection
+                addTestResult('Client Initialization', 'success', 'Supabase client created successfully');
+
+                // Test 2: Check auth
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    addTestResult('Authentication', 'success', 'Authentication system accessible');
+                } catch (error) {
+                    addTestResult('Authentication', 'warning', 'Auth accessible but no active session', error.message);
+                }
+
+                // Test 3: Check database tables
+                const tables = ['user_roles', 'system_users', 'project_validations', 'project_milestones', 'project_documents', 'audit_logs'];
+                
+                for (const table of tables) {
+                    try {
+                        const { data, error } = await supabase.from(table).select('*').limit(1);
+                        if (error) {
+                            if (error.code === 'PGRST116') {
+                                addTestResult(`Table: ${table}`, 'error', 'Table does not exist', 'Run user-management-schema.sql in Supabase SQL Editor');
+                            } else {
+                                addTestResult(`Table: ${table}`, 'error', `Database error: ${error.message}`, JSON.stringify(error, null, 2));
+                            }
+                        } else {
+                            addTestResult(`Table: ${table}`, 'success', `Table exists and accessible (${data ? data.length : 0} rows visible)`);
+                        }
+                    } catch (error) {
+                        addTestResult(`Table: ${table}`, 'error', 'Connection error', error.message);
+                    }
+                }
+
+                // Test 4: Check user_roles data
+                try {
+                    const { data: roles, error } = await supabase.from('user_roles').select('role_name').order('role_name');
+                    if (error) {
+                        addTestResult('Default Roles', 'error', 'Cannot fetch roles', error.message);
+                    } else if (roles && roles.length > 0) {
+                        const roleNames = roles.map(r => r.role_name).join(', ');
+                        addTestResult('Default Roles', 'success', `Found roles: ${roleNames}`);
+                    } else {
+                        addTestResult('Default Roles', 'warning', 'No roles found. Run the schema SQL to create default roles.');
+                    }
+                } catch (error) {
+                    addTestResult('Default Roles', 'error', 'Error checking roles', error.message);
+                }
+
+                // Test 5: Storage bucket
+                try {
+                    const { data: buckets, error } = await supabase.storage.listBuckets();
+                    if (error) {
+                        addTestResult('Storage', 'warning', 'Storage not accessible', error.message);
+                    } else {
+                        const bucketNames = buckets.map(b => b.name);
+                        if (bucketNames.includes('project-documents')) {
+                            addTestResult('Storage', 'success', 'project-documents bucket found');
+                        } else {
+                            addTestResult('Storage', 'warning', 'project-documents bucket not found', 'Create bucket in Supabase Storage dashboard');
+                        }
+                    }
+                } catch (error) {
+                    addTestResult('Storage', 'warning', 'Storage test failed', error.message);
+                }
+
+                // Final status
+                addTestResult('Overall Status', 'success', 'Connection test completed! Check individual results above.');
+
+            } catch (error) {
+                addTestResult('Connection Failed', 'error', 'Failed to connect to Supabase', error.message);
+            }
+        }
+
+        function toggleKeyVisibility() {
+            const keyInput = document.getElementById('supabaseKey');
+            keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+        }
+    </script>
+</body>
+</html>
