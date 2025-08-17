@@ -51,7 +51,7 @@ VALUES
     (4, 'auditor', 'System Auditor', '["view_all", "reports"]')
 ON CONFLICT (role_name) DO NOTHING;
 
--- Create councils table
+-- Create councils table with district column
 CREATE TABLE IF NOT EXISTS councils (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -60,14 +60,19 @@ CREATE TABLE IF NOT EXISTS councils (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Insert default councils
-INSERT INTO councils (id, name, district) 
+-- Add district column if it doesn't exist (for existing tables)
+ALTER TABLE councils ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+
+-- Insert default councils with both name and district
+INSERT INTO councils (id, name, location, district) 
 VALUES 
-    (1, 'Freetown City Council', 'Western Area Urban'),
-    (2, 'Bo City Council', 'Bo District'),
-    (3, 'Kenema City Council', 'Kenema District'),
-    (4, 'Makeni City Council', 'Bombali District')
-ON CONFLICT (id) DO NOTHING;
+    (1, 'Freetown City Council', 'Freetown', 'Western Area Urban'),
+    (2, 'Bo City Council', 'Bo', 'Bo District'),
+    (3, 'Kenema City Council', 'Kenema', 'Kenema District'),
+    (4, 'Makeni City Council', 'Makeni', 'Bombali District')
+ON CONFLICT (id) DO UPDATE SET 
+    location = EXCLUDED.location,
+    district = EXCLUDED.district;
 
 -- Create system_users table
 CREATE TABLE IF NOT EXISTS system_users (
