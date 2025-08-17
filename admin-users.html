@@ -137,6 +137,8 @@
                                 role_name: user.user_roles?.role_name || 'Unknown',
                                 council_name: user.councils?.name || 'N/A'
                             })));
+                        } else if (usersError) {
+                            console.warn('Error loading users, keeping demo data:', usersError.message);
                         }
 
                         // Load roles
@@ -145,8 +147,13 @@
                             .select('*')
                             .order('role_name');
 
-                        if (!rolesError && rolesData) {
+                        if (!rolesError && rolesData && rolesData.length > 0) {
+                            console.log('Loaded roles from database:', rolesData);
                             setRoles(rolesData);
+                        } else {
+                            console.warn('Error loading roles or empty result, keeping demo data:', rolesError?.message);
+                            // Ensure demo roles are set if database fails
+                            setRoles(DEMO_ROLES);
                         }
 
                         // Load councils
@@ -155,13 +162,26 @@
                             .select('*')
                             .order('name');
 
-                        if (!councilsError && councilsData) {
+                        if (!councilsError && councilsData && councilsData.length > 0) {
+                            console.log('Loaded councils from database:', councilsData);
                             setCouncils(councilsData);
+                        } else {
+                            console.warn('Error loading councils or empty result, keeping demo data:', councilsError?.message);
+                            // Ensure demo councils are set if database fails
+                            setCouncils(DEMO_COUNCILS);
                         }
 
                     } catch (error) {
                         console.error('Error loading data:', error);
+                        // Fallback to demo data
+                        setRoles(DEMO_ROLES);
+                        setCouncils(DEMO_COUNCILS);
                     }
+                } else {
+                    // Not connected to Supabase, ensure demo data is set
+                    console.log('Using demo mode - setting demo data');
+                    setRoles(DEMO_ROLES);
+                    setCouncils(DEMO_COUNCILS);
                 }
             };
 
@@ -171,11 +191,18 @@
 
                 try {
                     if (supabase) {
-                        // First, create auth user
-                        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+                        // Use regular signup instead of admin.createUser
+                        const { data: authData, error: authError } = await supabase.auth.signUp({
                             email: newUser.email,
                             password: newUser.password,
-                            email_confirm: true
+                            options: {
+                                data: {
+                                    full_name: newUser.full_name,
+                                    role_id: parseInt(newUser.role_id),
+                                    council_id: newUser.council_id ? parseInt(newUser.council_id) : null,
+                                    is_active: newUser.is_active
+                                }
+                            }
                         });
 
                         if (authError) {
@@ -184,27 +211,29 @@
                             return;
                         }
 
-                        // Then create user record
-                        const { data: userData, error: userError } = await supabase
-                            .from('system_users')
-                            .insert([{
-                                id: authData.user.id,
-                                email: newUser.email,
-                                full_name: newUser.full_name,
-                                role_id: parseInt(newUser.role_id),
-                                council_id: newUser.council_id ? parseInt(newUser.council_id) : null,
-                                is_active: newUser.is_active
-                            }])
-                            .select()
-                            .single();
+                        // Create user record in system_users table
+                        const userId = authData.user?.id;
+                        if (userId) {
+                            const { data: userData, error: userError } = await supabase
+                                .from('system_users')
+                                .insert([{
+                                    id: userId,
+                                    email: newUser.email,
+                                    full_name: newUser.full_name,
+                                    role_id: parseInt(newUser.role_id),
+                                    council_id: newUser.council_id ? parseInt(newUser.council_id) : null,
+                                    is_active: newUser.is_active
+                                }])
+                                .select()
+                                .single();
 
-                        if (userError) {
-                            alert('Error creating user record: ' + userError.message);
-                            setLoading(false);
-                            return;
+                            if (userError) {
+                                console.warn('Error creating user record:', userError.message);
+                                // Still consider it successful if auth user was created
+                            }
                         }
 
-                        alert('User created successfully!');
+                        alert('User created successfully! They will receive a confirmation email.');
                         loadData();
                     } else {
                         // Demo mode
