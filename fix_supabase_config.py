@@ -51,8 +51,11 @@ VALUES
     (4, 'auditor', 'System Auditor', '["view_all", "reports"]')
 ON CONFLICT (role_name) DO NOTHING;
 
--- Create councils table with district column
-CREATE TABLE IF NOT EXISTS councils (
+-- Drop councils table if it exists with wrong schema
+DROP TABLE IF EXISTS councils CASCADE;
+
+-- Create councils table with correct integer ID and district column
+CREATE TABLE councils (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     location VARCHAR(200),
@@ -60,16 +63,17 @@ CREATE TABLE IF NOT EXISTS councils (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Add district column if it doesn't exist (for existing tables)
-ALTER TABLE councils ADD COLUMN IF NOT EXISTS district VARCHAR(100);
-
--- Insert default councils with both name and district
+-- Insert default Sierra Leone councils with both location and district
 INSERT INTO councils (id, name, location, district) 
 VALUES 
     (1, 'Freetown City Council', 'Freetown', 'Western Area Urban'),
     (2, 'Bo City Council', 'Bo', 'Bo District'),
     (3, 'Kenema City Council', 'Kenema', 'Kenema District'),
-    (4, 'Makeni City Council', 'Makeni', 'Bombali District')
+    (4, 'Makeni City Council', 'Makeni', 'Bombali District'),
+    (5, 'Port Loko District Council', 'Port Loko', 'Port Loko District'),
+    (6, 'Bonthe Municipal Council', 'Bonthe', 'Bonthe District'),
+    (7, 'Moyamba District Council', 'Moyamba', 'Moyamba District'),
+    (8, 'Pujehun District Council', 'Pujehun', 'Pujehun District')
 ON CONFLICT (id) DO UPDATE SET 
     location = EXCLUDED.location,
     district = EXCLUDED.district;
